@@ -1,0 +1,11 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: RigExpert Fobos SDR Library
+Description: C Utility Library
+Version: @LIBVER@
+Cflags: -I${includedir}/ @LIBFOBOS_PC_CFLAGS@
+Libs: -L${libdir} -lfobos -lusb-1.0
+Libs.private: @LIBFOBOS_PC_LIBS@
