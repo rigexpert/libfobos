@@ -1,13 +1,7 @@
 //==============================================================================
-//       _____     __           _______
-//      /  __  \  /_/          /  ____/                                __
-//     /  /_ / / _   ____     / /__  __  __   ____    ____    ____   _/ /_
-//    /    __ / / / /  _  \  / ___/  \ \/ /  / __ \  / __ \  / ___\ /  _/
-//   /  /\ \   / / /  /_/ / / /___   /   /  / /_/ / /  ___/ / /     / /_
-//  /_ /  \_\ /_/  \__   / /______/ /_/\_\ / ____/  \____/ /_/      \___/
-//               /______/                 /_/             
-//  Copyright (C) Rig Expert Ukraine Ltd.
 //  Fobos SDR API library test application
+//  V.T.
+//  LGPL-2.1+
 //  2024.03.21
 //  2024.04.08
 //  2024.05.01
@@ -36,7 +30,8 @@ void read_samples_callback(float *buf, uint32_t buf_length, void *ctx)
     rx_ctx->buff_count++;
 
     printf("+");
-
+    fflush(stdout);
+    
     if (rx_ctx->buff_count >= rx_ctx->max_buff_count)
     {
         printf("canceling...");

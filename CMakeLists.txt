@@ -1,12 +1,9 @@
 ########################################################################
-#       _____     __           _______
-#      /  __  \  /_/          /  ____/                                __
-#     /  /_ / / _   ____     / /__  __  __   ____    ____    ____   _/ /_
-#    /    __ / / / /  _  \  / ___/  \ \/ /  / __ \  / __ \  / ___\ /  _/
-#   /  /\ \   / / /  /_/ / / /___   /   /  / /_/ / /  ___/ / /     / /_
-#  /_ /  \_\ /_/  \__   / /______/ /_/\_\ / ____/  \____/ /_/      \___/
-# 
-#  Copyright (C) Rig Expert Ukraine Ltd.
+#
+# Fobos SDR project
+# V.T.
+# LGPL
+#
 ########################################################################
 #
 # This program is free software: you can redistribute it and/or modify
@@ -25,7 +22,7 @@
 ########################################################################
 # Project setup
 ########################################################################
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.7.2)
 
 if(${CMAKE_VERSION} VERSION_LESS "3.12.0")
     project(fobos)
@@ -33,6 +30,9 @@ else()
     project(fobos C)
 endif()
 
+include(GNUInstallDirs)
+
+message(>>> "CMAKE_INSTALL_LIBDIR: " ${CMAKE_INSTALL_LIBDIR})
 set(CMAKE_C_FLAGS, "${CMAKE_C_FLAGS} -std=c99")
 set(CMAKE_GENERATOR_PLATFORM  x64)
 #set(CMAKE_GENERATOR_PLATFORM  Win32)
@@ -127,14 +127,12 @@ ADD_CUSTOM_COMMAND(TARGET libfobos
 else()
 endif()
 
-#target_link_libraries(libfobos ${LIBUSB_LIBRARIES})
 
-if(${CMAKE_VERSION} VERSION_LESS "3.13.0")
-    project(fobos)
+if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
+	target_link_libraries(libfobos PRIVATE ${LIBUSB_LIBRARIES})
 else()
-    target_link_directories(libfobos PRIVATE ${LIBUSB_LIBRARIES})
+	target_link_directories(libfobos PRIVATE ${LIBUSB_LIBRARIES})
 endif()
-
 
 target_include_directories(libfobos PUBLIC
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
@@ -143,7 +141,6 @@ target_include_directories(libfobos PUBLIC
   ${LIBUSB_INCLUDE_DIRS}
   )
   
-set_target_properties(libfobos PROPERTIES PUBLIC_HEADER fobos/fobos.h)  
 set_target_properties(libfobos PROPERTIES DEFINE_SYMBOL "FOBOS_EXPORTS")
 set_target_properties(libfobos PROPERTIES OUTPUT_NAME fobos)
 ########################################################################
@@ -162,7 +159,7 @@ INSTALL(
 ########################################################################
 INSTALL(
     TARGETS libfobos
-    LIBRARY DESTINATION ${LIB_INSTALL_DIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 ) 
 ########################################################################
 
@@ -190,7 +187,6 @@ CONFIGURE_FILE(
     ${CMAKE_CURRENT_SOURCE_DIR}/libfobos.pc.in
     ${CMAKE_CURRENT_BINARY_DIR}/libfobos.pc
 @ONLY)
-
 INSTALL(
     FILES ${CMAKE_CURRENT_BINARY_DIR}/libfobos.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
@@ -211,11 +207,10 @@ add_custom_target(uninstall
 ########################################################################
 
 ########################################################################
-# Create executable
+# Create executable fobos_devinfo
 ########################################################################
 add_executable(fobos_devinfo
     eval/fobos_devinfo_main.c)
-
 target_compile_options(fobos_devinfo PUBLIC -std=c99)
 
 target_link_libraries(fobos_devinfo PRIVATE libfobos)
@@ -232,7 +227,7 @@ target_include_directories(fobos_devinfo PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 ########################################################################
 
 ########################################################################
-# Create executable
+# Create executable fobos_recorder
 ########################################################################
 add_executable(fobos_recorder 
     eval/fobos_recorder_main.c 
@@ -259,5 +254,4 @@ target_include_directories(fobos_recorder PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-#set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "" FORCE)
 ########################################################################

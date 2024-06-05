@@ -1,0 +1,10 @@
+v.2.2.2
+
+- sync mode (fobos_rx_start_sync, fobos_rx_read_sync, fobos_rx_stop_sync)
+- calibration modified
+- direct sampling modified
+ 
+
+v.2.1.1 (initial)
+
+- all the basic functionality
