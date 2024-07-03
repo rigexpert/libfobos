@@ -89,7 +89,7 @@ endif()
 # Install udev rules
 ########################################################################
 install(
-	FILES fobos-sdr.rules
+	FILES 99-fobos-sdr.rules
     DESTINATION "/etc/udev/rules.d"
     COMPONENT "udev"
     )
