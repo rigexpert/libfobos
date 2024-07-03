@@ -878,7 +878,7 @@ int fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index)
 #ifndef _WIN32
             if (result == LIBUSB_ERROR_ACCESS)
             {
-                printf_internal("Please fix the device permissions by installing fobos-sdr.rules\n");
+                printf_internal("Please fix the device permissions by installing 99-fobos-sdr.rules\n");
             }
 #endif
         }
