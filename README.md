@@ -42,7 +42,7 @@ mkdir build
 cd build
 cmake ..
 ```
-to build Win32 binaries (legasy software) use
+to build Win32 binaries (legacy software) use
 
 ```
 cmake .. -A Win32
