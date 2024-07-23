@@ -24,39 +24,38 @@ See [versions.txt](versions.txt)
 
 ### Linux
 ```
-git clone [this repo]<br />
-cd libfobos<br />
-mkdir build<br />
-cd build<br />
-cmake ..<br />
-make<br />
-subo make install<br />
-sudo udevadm control --reload-rules<br />
-sudo udevadm trigger<br />
+git clone [this repo]
+cd libfobos
+mkdir build
+cd build
+cmake ..
+make
+subo make install
+sudo udevadm control --reload-rules
+sudo udevadm trigger
 ```
 ### Windows
 ```
-git clone [this repo]<br />
-cd libfobos<br />
-mkdir build<br />
-cd build<br />
-cmake ..<br />
+git clone [this repo]
+cd libfobos
+mkdir build
+cd build
+cmake ..
 ```
 to build Win32 binaries (legasy software) use
 
 ```
-cmake .. -A Win32<br />
+cmake .. -A Win32
 ```
 
 Visit https://github.com/libusb/libusb/releases<br />
 Download any libusb release 7z pack, for example  libusb-1.0.27.7z<br />
 Unpack content of **libusb-1.0.27.7z** to **libusb** directory<br />
 ```
-cmake --build . --config Release<br />
+cmake --build . --config Release
 ```
 or<br />
-open **fobos.sln** in your favorite **MS VisualStudio IDE**,<br />
-build, debug, trace, evaluate.<br />
+open **fobos.sln** in your favorite **MS VisualStudio IDE**, build, debug, trace, evaluate.<br />
 
 ## How to use Fobos SDR API elsewhere
 
