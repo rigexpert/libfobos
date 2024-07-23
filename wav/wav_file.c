@@ -6,7 +6,6 @@
 //==============================================================================
 #include <string.h>
 #include "wav_file.h"
-#define _CRT_SECURE_NO_WARNINGS
 //==============================================================================
 struct wav_file_t * wav_file_create(void)
 {
@@ -89,7 +88,7 @@ int wav_file_write_header(struct wav_file_t * ctx)
     }
     uint16_t b16;
     uint32_t b32;
-    long pos = ftell(ctx->file);
+    size_t pos = ftell(ctx->file);
     fseek(ctx->file, 0, SEEK_SET);
     //=============================================================================
     char ChunkID[4] = { 'R', 'I', 'F', 'F' };
@@ -254,13 +253,13 @@ int wav_file_read_header(struct wav_file_t * ctx)
     return result;
 }
 //==============================================================================
-int wav_file_write_data(struct wav_file_t * ctx, void * data, size_t size)
+size_t wav_file_write_data(struct wav_file_t * ctx, void * data, size_t size)
 {
     if (ctx->file)
     {
-        int wrote = fwrite(data, size, 1, ctx->file) * size;
+        size_t wrote = fwrite(data, size, 1, ctx->file) * size;
         ctx->file_size = ftell(ctx->file);
-        ctx->samples_count += (size / ctx->bytes_per_sample);
+        ctx->samples_count += (size / (size_t)ctx->bytes_per_sample);
         ctx->sample_groups_count = ctx->samples_count * ctx->channels_count;
         return wrote;
     }
@@ -270,7 +269,7 @@ int wav_file_write_data(struct wav_file_t * ctx, void * data, size_t size)
     }
 }
 //==============================================================================
-int wav_file_read_data(struct wav_file_t * ctx, void * data, size_t size)
+size_t wav_file_read_data(struct wav_file_t * ctx, void * data, size_t size)
 {
     int Result = 0;
     if (ctx->file)
@@ -280,7 +279,7 @@ int wav_file_read_data(struct wav_file_t * ctx, void * data, size_t size)
     return Result;
 }
 //==============================================================================
-int wav_file_samples_to_data(struct wav_file_t * ctx, const float * samples, size_t count, char * data, size_t * size)
+size_t wav_file_samples_to_data(struct wav_file_t * ctx, const float * samples, size_t count, char * data, size_t * size)
 {
     size_t data_size = 0;
     size_t i;
@@ -398,7 +397,7 @@ int wav_file_samples_to_data(struct wav_file_t * ctx, const float * samples, siz
     return data_size;
 }
 //==============================================================================
-int wav_file_data_to_samples(struct wav_file_t * ctx, const char * data, size_t size, float * samples, size_t * count)
+size_t wav_file_data_to_samples(struct wav_file_t * ctx, const char * data, size_t size, float * samples, size_t * count)
 {
     size_t samples_count = 0;
     size_t i;

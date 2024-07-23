@@ -37,10 +37,10 @@ int wav_file_open(struct wav_file_t * ctx, const char * file_name, const char * 
 int wav_file_close(struct wav_file_t * ctx);
 int wav_file_write_header(struct wav_file_t * ctx);
 int wav_file_read_header(struct wav_file_t * ctx);
-int wav_file_write_data(struct wav_file_t * ctx, void * data, size_t size);
-int wav_file_read_data(struct wav_file_t * ctx, void * data, size_t size);
+size_t wav_file_write_data(struct wav_file_t * ctx, void * data, size_t size);
+size_t wav_file_read_data(struct wav_file_t * ctx, void * data, size_t size);
 //int wav_file_write_samples(struct wav_file_t * ctx, const char * data, size_t size);
 //int wav_file_read_samples(struct wav_file_t * ctx, const char * data, size_t size);
-int wav_file_samples_to_data(struct wav_file_t * ctx, const float * samples, size_t count, char * data, size_t * size);
-int wav_file_data_to_samples(struct wav_file_t * ctx, const char * data, size_t size, float * samples, size_t * count);
+size_t wav_file_samples_to_data(struct wav_file_t * ctx, const float * samples, size_t count, char * data, size_t * size);
+size_t wav_file_data_to_samples(struct wav_file_t * ctx, const char * data, size_t size, float * samples, size_t * count);
 #endif // __WAV_FILE_H__

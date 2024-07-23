@@ -1,7 +1,7 @@
 //==============================================================================
 //  Fobos SDR API library test application
 //  V.T.
-//  LGPL
+//  LGPL-2.1+
 //  2024.03.21
 //  2024.04.08
 //  2024.05.01
@@ -16,7 +16,7 @@ void get_devinfo()
     int result = 0;
     char lib_version[32];
     char drv_version[32];
-    char serials[256];
+    char serials[256] = {0};
 
     int index = 0;
 

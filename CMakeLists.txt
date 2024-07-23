@@ -22,7 +22,7 @@
 ########################################################################
 # Project setup
 ########################################################################
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.7.2)
 
 if(${CMAKE_VERSION} VERSION_LESS "3.12.0")
     project(fobos)
@@ -30,9 +30,9 @@ else()
     project(fobos C)
 endif()
 
+include(GNUInstallDirs)
+message(>>> "CMAKE_INSTALL_LIBDIR: " ${CMAKE_INSTALL_LIBDIR})
 set(CMAKE_C_FLAGS, "${CMAKE_C_FLAGS} -std=c99")
-set(CMAKE_GENERATOR_PLATFORM  x64)
-#set(CMAKE_GENERATOR_PLATFORM  Win32)
 ########################################################################
 
 ########################################################################
@@ -55,6 +55,7 @@ if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
     ADD_DEFINITIONS(-Wsign-compare)
     ADD_DEFINITIONS(-ansi)
 elseif(MSVC14 OR MSVC14)
+    ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS)
     ADD_DEFINITIONS(-D_TIMESPEC_DEFINED)
 endif()
 ########################################################################
@@ -69,10 +70,10 @@ if(PKG_CONFIG_FOUND)
         set(LIBUSB_LIBRARIES "${LIBUSB_LINK_LIBRARIES}")
     endif()
 else()
-if (CMAKE_GENERATOR_PLATFORM STREQUAL Win32)
+if (CMAKE_VS_PLATFORM_NAME STREQUAL Win32)
 	set(LIBUSB_LIBRARIES ${CMAKE_SOURCE_DIR}/libusb/MS32/dll)
 endif()
-if (CMAKE_GENERATOR_PLATFORM STREQUAL x64)
+if (CMAKE_VS_PLATFORM_NAME STREQUAL x64)
     set(LIBUSB_LIBRARIES ${CMAKE_SOURCE_DIR}/libusb/MS64/dll)
 endif()
     set(LIBUSB_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/libusb/include)
@@ -86,7 +87,7 @@ endif()
 # Install udev rules
 ########################################################################
 install(
-	FILES fobos-sdr.rules
+    FILES fobos-sdr.rules
     DESTINATION "/etc/udev/rules.d"
     COMPONENT "udev"
     )
@@ -113,25 +114,22 @@ if(MSVC)
 target_compile_options(libfobos PUBLIC "/MT")
 ADD_CUSTOM_COMMAND(TARGET libfobos
           POST_BUILD
-		  COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/Debug
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/Debug
           COMMAND ${CMAKE_COMMAND} -E copy ${LIBUSB_LIBRARIES}/libusb-1.0.dll ${PROJECT_BINARY_DIR}/Debug
 )
 ADD_CUSTOM_COMMAND(TARGET libfobos
           POST_BUILD
-		  COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/Release
+          COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/Release
           COMMAND ${CMAKE_COMMAND} -E copy ${LIBUSB_LIBRARIES}/libusb-1.0.dll ${PROJECT_BINARY_DIR}/Release
 )
 else()
 endif()
 
-#target_link_libraries(libfobos ${LIBUSB_LIBRARIES})
-
-if(${CMAKE_VERSION} VERSION_LESS "3.13.0")
-    project(fobos)
+if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
+    target_link_libraries(libfobos PRIVATE ${LIBUSB_LIBRARIES})
 else()
     target_link_directories(libfobos PRIVATE ${LIBUSB_LIBRARIES})
 endif()
-
 
 target_include_directories(libfobos PUBLIC
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
@@ -140,7 +138,6 @@ target_include_directories(libfobos PUBLIC
   ${LIBUSB_INCLUDE_DIRS}
   )
   
-set_target_properties(libfobos PROPERTIES PUBLIC_HEADER fobos/fobos.h)  
 set_target_properties(libfobos PROPERTIES DEFINE_SYMBOL "FOBOS_EXPORTS")
 set_target_properties(libfobos PROPERTIES OUTPUT_NAME fobos)
 ########################################################################
@@ -159,7 +156,7 @@ INSTALL(
 ########################################################################
 INSTALL(
     TARGETS libfobos
-    LIBRARY DESTINATION ${LIB_INSTALL_DIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 ) 
 ########################################################################
 
@@ -208,7 +205,7 @@ add_custom_target(uninstall
 ########################################################################
 
 ########################################################################
-# Create executable
+# Create executable fobos_devinfo
 ########################################################################
 add_executable(fobos_devinfo
     eval/fobos_devinfo_main.c)
@@ -229,20 +226,20 @@ target_include_directories(fobos_devinfo PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 ########################################################################
 
 ########################################################################
-# Create executable
+# Create executable fobos_recorder
 ########################################################################
 add_executable(fobos_recorder 
     eval/fobos_recorder_main.c 
-	wav/wav_file.c)
+    wav/wav_file.c)
 
 target_compile_options(fobos_recorder PUBLIC -std=c99)
 
 target_link_libraries(fobos_recorder PRIVATE libfobos)
 
 if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
-	target_link_libraries(fobos_recorder PRIVATE ${LIBUSB_LIBRARIES})
+    target_link_libraries(fobos_recorder PRIVATE ${LIBUSB_LIBRARIES})
 else()
-	target_link_directories(fobos_recorder PRIVATE ${LIBUSB_LIBRARIES})
+    target_link_directories(fobos_recorder PRIVATE ${LIBUSB_LIBRARIES})
 endif()
 
 target_include_directories(fobos_recorder PRIVATE ${CMAKE_SOURCE_DIR})
@@ -256,5 +253,4 @@ target_include_directories(fobos_recorder PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-#set(CMAKE_CONFIGURATION_TYPES "Release" CACHE STRING "" FORCE)
 ########################################################################

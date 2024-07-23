@@ -1,7 +1,7 @@
 //==============================================================================
 //  Fobos SDR API library test application
 //  V.T.
-//  LGPL
+//  LGPL-2.1+
 //  2024.03.21
 //  2024.04.08
 //  2024.05.01
@@ -30,7 +30,8 @@ void read_samples_callback(float *buf, uint32_t buf_length, void *ctx)
     rx_ctx->buff_count++;
 
     printf("+");
-
+    fflush(stdout);
+    
     if (rx_ctx->buff_count >= rx_ctx->max_buff_count)
     {
         printf("canceling...");
@@ -51,7 +52,7 @@ void test_recorder(void)
     int result = 0;
     char lib_version[32];
     char drv_version[32];
-    char serials[256];
+    char serials[256] = {0};
 
     int index = 0; // the device index to open
 

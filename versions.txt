@@ -1,3 +1,9 @@
+v.2.3.1
+
+- update fow hw rev.3.0.0 (also backwards compatibility)
+- new band plan
+- IQ calibration on the fly
+
 v.2.2.2
 
 - sync mode (fobos_rx_start_sync, fobos_rx_read_sync, fobos_rx_stop_sync)

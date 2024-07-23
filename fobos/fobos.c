@@ -10,8 +10,10 @@
 //  2024.03.21
 //  2024.04.08
 //  2024.05.29 - sync mode (fobos_rx_start_sync, fobos_rx_read_sync, fobos_rx_stop_sync)
+//  2024.06.21 - update fow hw rev.3.0.0
+//  2024.07.08 - new band plan
+//  2024.07.20 - IQ calibration on the fly
 //==============================================================================
-#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
@@ -33,9 +35,7 @@
 //==============================================================================
 //#define FOBOS_PRINT_DEBUG
 //==============================================================================
-#define FOBOS_HW_REVISION "2.0.1"
-#define FOBOS_FV_VERSION "1.1.0"
-#define LIB_VERSION "2.2.2"
+#define LIB_VERSION "2.3.1"
 #define DRV_VERSION "libusb"
 //==============================================================================
 #define FOBOS_VENDOR_ID 0x16d0
@@ -45,8 +45,9 @@
 #define FOBOS_DEV_PRESEL_V2 1
 #define FOBOS_DEV_LNA_LP_SHD 2
 #define FOBOS_DEV_LNA_HP_SHD 3
-#define FOBOS_DEV_IF_V1 4
-#define FOBOS_DEV_IF_V2 5
+#define FOBOS_DEV_IF_V1  4
+#define FOBOS_DEV_IF_V2  5
+#define FOBOS_DEV_OQMUX  6
 #define FOBOS_DEV_LPF_A0 6
 #define FOBOS_DEV_LPF_A1 7
 #define FOBOS_DEV_NENBL_HF 8
@@ -91,6 +92,9 @@ struct fobos_dev_t
     //=== common ===============================================================
     uint16_t user_gpo;
     uint16_t dev_gpo;
+    char hw_revision[32];
+    char fw_version[32];
+    char fw_build[32];
     char manufacturer[LIBUSB_DDESCRIPTOR_LEN];
     char product[LIBUSB_DDESCRIPTOR_LEN];
     char serial[LIBUSB_DDESCRIPTOR_LEN];
@@ -99,11 +103,12 @@ struct fobos_dev_t
     uint32_t rx_frequency_band;
     double rx_samplerate;
     double rx_bandwidth;
-    uint8_t rx_lpf_idx;
-    uint8_t rx_lna_gain;
-    uint8_t rx_vga_gain;
-    uint8_t rx_bw_idx;
-    uint8_t rx_direct_sampling;
+    uint32_t rx_lpf_idx;
+    uint32_t rx_lna_gain;
+    uint32_t rx_vga_gain;
+    uint32_t rx_bw_idx;
+    uint32_t rx_bw_adj;
+    uint32_t rx_direct_sampling;
     fobos_rx_cb_t rx_cb;
     void *rx_cb_ctx;
     enum fobos_async_status rx_async_status;
@@ -111,13 +116,15 @@ struct fobos_dev_t
     uint32_t rx_failures;
     uint32_t rx_buff_counter;
     int rx_swap_iq;
-    int rx_calibration_state;
-    int rx_calibration_pos;
     float rx_dc_re;
     float rx_dc_im;
+    float rx_avg_re;
+    float rx_avg_im;
     float rx_scale_re;
     float rx_scale_im;
     float * rx_buff;
+    double max2830_clock;
+    uint64_t rffc507x_clock;
     uint16_t rffc507x_registers_local[31];
     uint16_t rffc500x_registers_remote[31];
     int rx_sync_started;
@@ -162,7 +169,7 @@ int fobos_rx_get_api_info(char * lib_version, char * drv_version)
 {
     if (lib_version)
     {
-        strcpy(lib_version, LIB_VERSION);
+        strcpy(lib_version, LIB_VERSION" "__DATE__" "__TIME__);
     }
     if (drv_version)
     {
@@ -414,14 +421,22 @@ int fobos_max2830_init(struct fobos_dev_t * dev)
 //==============================================================================
 int fobos_max2830_set_frequency(struct fobos_dev_t * dev, double value, double * actual)
 {
-    double fcomp = 25000000.0;
-    double div = value / fcomp;
-    uint32_t div_int = (uint32_t)(div) & 0x000000FF;
-    uint32_t div_frac = (uint32_t)((div - div_int) * 1048575.0 + 0.5);
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(%f);\n", __FUNCTION__, value);
 #endif // FOBOS_PRINT_DEBUG
-    fobos_max2830_write_reg(dev, 5, 0x00A0); // Reference Frequency Divider = 1
+    double fcomp = dev->max2830_clock;
+    if (fcomp > 26000000.0)
+    {
+        fcomp /= 2.0;
+        fobos_max2830_write_reg(dev, 5, 0x00A4); // Reference Frequency Divider = 2
+    }
+    else
+    {
+        fobos_max2830_write_reg(dev, 5, 0x00A0); // Reference Frequency Divider = 1
+    }
+    double div = value / fcomp;
+    uint32_t div_int = (uint32_t)(div) & 0x000000FF;
+    uint32_t div_frac = (uint32_t)((div - div_int) * 1048575.0 + 0.5);
     if (actual)
     {
         div = (double)(div_int) + (double)(div_frac) / 1048575.0;
@@ -491,7 +506,7 @@ static const uint16_t rffc507x_regs_default[RFFC507X_REGS_COUNT] =
     0x1e84,   /* 0x0F */
     0x89d8,   /* 0x10 */
     0x9d00,   /* 0x11 */
-    0x2a20,   /* 0x12 */
+    0x2a80,   /* 0x12 */
     0x0000,   /* 0x13 */
     0x0000,   /* 0x14 */
     0x0000,   /* 0x15 */
@@ -561,20 +576,20 @@ int fobos_rffc507x_init(struct fobos_dev_t * dev)
     return FOBOS_ERR_NO_DEV;
 }
 //==============================================================================
-#define FOBOS_RFFC507X_LO_MAX 5400
-#define FOBOS_RFFC507X_REF_FREQ 25
-int fobos_rffc507x_set_lo_frequency(struct fobos_dev_t * dev, int lo_freq_mhz, uint64_t * tune_freq_hz)
+int fobos_rffc507x_set_lo_frequency_hz(struct fobos_dev_t * dev, uint64_t lo_freq_hz, uint64_t * tune_freq_hz)
 {
-    uint32_t lodiv;
-    uint16_t fvco;
+    uint64_t lodiv;
+    uint64_t fvco;
     uint32_t fbkdiv;
     uint16_t pllcpl;
     uint16_t n;
     uint16_t p1nmsb;
-    uint8_t p1nlsb;
-
-    uint8_t n_lo = 0;
-    uint16_t x = FOBOS_RFFC507X_LO_MAX / lo_freq_mhz;
+    uint16_t p1nlsb;
+    uint64_t lo_max = 5400000000ULL;
+    uint64_t fref = 25000000ULL;
+    fref = dev->rffc507x_clock;
+    uint16_t n_lo = 0; // aka p1lodiv
+    uint32_t x = lo_max / lo_freq_hz;
     while ((x > 1) && (n_lo < 5))
     {
         n_lo++;
@@ -582,17 +597,14 @@ int fobos_rffc507x_set_lo_frequency(struct fobos_dev_t * dev, int lo_freq_mhz, u
     }
 
     lodiv = 1 << n_lo;
-    fvco = lodiv * lo_freq_mhz;
+    fvco = lodiv * lo_freq_hz;
 
-    if (fvco > 3200)
+    fbkdiv = 2;
+    pllcpl = 2;
+    if (fvco > 3200000000ULL)
     {
         fbkdiv = 4;
         pllcpl = 3;
-    }
-    else
-    {
-        fbkdiv = 2;
-        pllcpl = 2;
     }
 
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x15], 14, 14, 0); // enbl = 0
@@ -600,12 +612,12 @@ int fobos_rffc507x_set_lo_frequency(struct fobos_dev_t * dev, int lo_freq_mhz, u
 
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x00], 2, 0, pllcpl);
 
-    uint64_t tmp_n = ((uint64_t)fvco << 29ULL) / ((uint64_t)fbkdiv * FOBOS_RFFC507X_REF_FREQ);
+    uint64_t tmp_n = (fvco << 29ULL) / (fbkdiv * fref);
     n = tmp_n >> 29ULL;
 
     p1nmsb = (tmp_n >> 13ULL) & 0xffff;
     p1nlsb = (tmp_n >> 5ULL) & 0xff;
-    uint64_t freq_hz= (FOBOS_RFFC507X_REF_FREQ * (tmp_n >> 5ULL) * (uint64_t)fbkdiv * 1000000) / ((uint64_t)lodiv * (1 << 24ULL));
+    uint64_t freq_hz = (fref * (tmp_n >> 5ULL) * fbkdiv) / (lodiv * (1 << 24ULL));
     if (tune_freq_hz)
     {
         *tune_freq_hz = freq_hz;
@@ -616,10 +628,10 @@ int fobos_rffc507x_set_lo_frequency(struct fobos_dev_t * dev, int lo_freq_mhz, u
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0C], 3,  2, fbkdiv >> 1); // p1presc
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0D], 15, 0, p1nmsb);      // p1nmsb
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0E], 15, 8, p1nlsb);      // p1nlsb
-    // Path 2
-    fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0F], 6, 4, n_lo);         // p2lodiv
+                                                                                              // Path 2
+    fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0F], 6,  4, n_lo);        // p2lodiv
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0F], 15, 7, n);           // p1n
-    fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0F], 3, 2, fbkdiv >> 1);  // p1presc
+    fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0F], 3,  2, fbkdiv >> 1); // p1presc
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x10], 15, 0, p1nmsb);      // p1nmsb
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x11], 15, 8, p1nlsb);      // p1nlsb
 
@@ -629,7 +641,7 @@ int fobos_rffc507x_set_lo_frequency(struct fobos_dev_t * dev, int lo_freq_mhz, u
     fobos_rffc507x_commit(dev, 0);
 #ifdef FOBOS_PRINT_DEBUG
     double ff = (double)freq_hz;
-    printf_internal("rffc507x lo_freq_mhz = %d %f\n", lo_freq_mhz, ff);
+    printf_internal("rffc507x lo_freq_mhz = %lld %f\n", lo_freq_hz, ff);
 #endif // FOBOS_PRINT_DEBUG
     return 0;
 }
@@ -749,11 +761,13 @@ int fobos_si5351c_init(struct fobos_dev_t * dev)
 
     fobos_si5351c_config_pll(dev, 0, 80 * 128 - 512, 0, 1);
 
-    // Configure rffc507x_clk to 25 MHz
-    fobos_si5351c_config_msynth(dev, 0, 32 * 128 - 512, 0, 1, 0);
+    // Configure rffc507x_clk
+    fobos_si5351c_config_msynth(dev, 0, 20 * 128 - 512, 0, 1, 0); // 40 MHz
+    dev->rffc507x_clock = 40000000ULL;
 
-    // Configure max2830_clk to 25 MHz
-    fobos_si5351c_config_msynth(dev, 4, 32 * 128 - 512, 0, 1, 0);
+    // Configure max2830_clk
+    fobos_si5351c_config_msynth(dev, 4, 20 * 128 - 512, 0, 1, 0); // 40 MHz
+    dev->max2830_clock = 40000000.0;
 
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("si5351c registers:\n");
@@ -783,11 +797,17 @@ int fobos_fx3_command(struct fobos_dev_t * dev, uint8_t code, uint16_t value, ui
 //==============================================================================
 int fobos_rx_set_user_gpo(struct fobos_dev_t * dev, uint8_t value)
 {
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(0x%04x);\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
     return fobos_fx3_command(dev, 0xE3, value, 0);
 }
 //==============================================================================
 int fobos_rx_set_dev_gpo(struct fobos_dev_t * dev, uint16_t value)
 {
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(0x%04x);\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
     return fobos_fx3_command(dev, 0xE4, value, 0);
 }
 //==============================================================================
@@ -841,11 +861,30 @@ int fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index)
             {
                 *out_dev = dev;
                 //======================================================================
+                result  = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 0, 0, (unsigned char *)dev->hw_revision, sizeof(dev->hw_revision), CTRL_TIMEOUT);
+                if (result <= 0)
+                {
+                    strcpy(dev->hw_revision, "2.0.0");
+                }
+                result = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 1, 0, (unsigned char *)dev->fw_version, sizeof(dev->fw_version), CTRL_TIMEOUT);
+                if (result <= 0)
+                {
+                    strcpy(dev->hw_revision, "2.0.0");
+                }
+                result = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 2, 0, (unsigned char *)dev->fw_build, sizeof(dev->fw_build), CTRL_TIMEOUT);
+                if (result <= 0)
+                {
+                    strcpy(dev->fw_build, "unknown");
+                }
+                //======================================================================
+                dev->rx_frequency_band = 0xFFFFFFFF;
                 dev->dev_gpo = 0;
                 dev->rx_scale_re = 1.0f / 32768.0f;
                 dev->rx_scale_im = 1.0f / 32768.0f;
                 dev->rx_dc_re = 0.25f;
                 dev->rx_dc_im = 0.25f;
+                dev->rx_avg_re = 0.0f;
+                dev->rx_avg_im = 0.0f;
                 if (fobos_check(dev) == 0)
                 {
                     bitset(dev->dev_gpo, FOBOS_DEV_CLKSEL);
@@ -859,8 +898,7 @@ int fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index)
                     fobos_si5351c_init(dev);
                     fobos_max2830_init(dev);
                     fobos_rffc507x_init(dev);
-                    fobos_rffc507x_set_lo_frequency(dev, 2375, 0);
-                    fobos_max2830_set_frequency(dev, 2475000000.0, 0);
+                    fobos_rx_set_frequency(dev, 100E6, 0);
                     fobos_rx_set_samplerate(dev, 10000000.0, 0);
                     return FOBOS_ERR_OK;
                 }
@@ -947,11 +985,13 @@ int fobos_rx_get_board_info(struct fobos_dev_t * dev, char * hw_revision, char *
     }
     if (hw_revision)
     {
-        strcpy(hw_revision, FOBOS_HW_REVISION);
+        strcpy(hw_revision, dev->hw_revision);
     }
     if (fw_version)
     {
-        strcpy(fw_version, FOBOS_FV_VERSION);
+        strcpy(fw_version, dev->fw_version);
+        strcat(fw_version, " ");
+        strcat(fw_version, dev->fw_build);
     }
     if (manufacturer)
     {
@@ -968,12 +1008,159 @@ int fobos_rx_get_board_info(struct fobos_dev_t * dev, char * hw_revision, char *
     return result;
 }
 //==============================================================================
-#define FOBOS_MIN_LP_FREQ_MHZ (40)
-#define FOBOS_MAX_LP_FREQ_MHZ (2300)
-#define FOBOS_MIN_BP_FREQ_MHZ (2300)
-#define FOBOS_MAX_BP_FREQ_MHZ (2550)
-#define FOBOS_MIN_HP_FREQ_MHZ (2550)
-#define FOBOS_MAX_HP_FREQ_MHZ (6550)
+#define FOBOS_PRESELECT_BYPASS   0
+#define FOBOS_PRESELECT_LOWPASS  1
+#define FOBOS_PRESELECT_HIGHPASS 2
+#define FOBOS_IF_FILTER_NONE     0
+#define FOBOS_IF_FILTER_LOW      1
+#define FOBOS_IF_FILTER_HIGH     2
+#define FOBOS_IF_FREQ_AUTO       0
+#define FOBOS_IF_FREQ_2350       2350
+#define FOBOS_IF_FREQ_2400       2400
+#define FOBOS_IF_FREQ_2450       2450
+#define FOBOS_INJECT_NONE        0
+#define FOBOS_INJECT_LOW         1
+#define FOBOS_INJECT_HIGH        2
+//==============================================================================
+typedef struct 
+{
+    uint32_t idx;
+    uint32_t freq_mhz_min;
+    uint32_t freq_mhz_max;
+    uint32_t preselect;
+    uint32_t if_filter;
+    uint32_t if_freq_mhz;
+    uint32_t rffc507x_enabled;
+    uint32_t rffc507x_inject;
+    uint32_t swap_iq;
+} fobos_rx_band_param_t;
+//==============================================================================
+const fobos_rx_band_param_t fobos_rx_bands[] =
+{
+    {
+        .idx = 0,
+        .freq_mhz_min = 50,
+        .freq_mhz_max = 2200,
+        .preselect = FOBOS_PRESELECT_LOWPASS,
+        .if_filter = FOBOS_IF_FILTER_LOW,
+        .if_freq_mhz = FOBOS_IF_FREQ_2350,
+        .rffc507x_enabled = 1,
+        .rffc507x_inject = FOBOS_INJECT_LOW,
+        .swap_iq = 1,
+    },
+    {
+        .idx = 1,
+        .freq_mhz_min = 2200,
+        .freq_mhz_max = 2300,
+        .preselect = FOBOS_PRESELECT_LOWPASS,
+        .if_filter = FOBOS_IF_FILTER_HIGH,
+        .if_freq_mhz = FOBOS_IF_FREQ_2450,
+        .rffc507x_enabled = 1,
+        .rffc507x_inject = FOBOS_INJECT_LOW,
+        .swap_iq = 1,
+    },
+    {
+        .idx = 2,
+        .freq_mhz_min = 2300,
+        .freq_mhz_max = 2550,
+        .preselect = FOBOS_PRESELECT_BYPASS,
+        .if_filter = FOBOS_IF_FILTER_NONE,
+        .if_freq_mhz = FOBOS_IF_FREQ_AUTO,
+        .rffc507x_enabled = 0,
+        .rffc507x_inject = FOBOS_INJECT_NONE,
+        .swap_iq = 0,
+    },
+    {
+        .idx = 3,
+        .freq_mhz_min = 2550,
+        .freq_mhz_max = 3000,
+        .preselect = FOBOS_PRESELECT_HIGHPASS,
+        .if_filter = FOBOS_IF_FILTER_LOW,
+        .if_freq_mhz = FOBOS_IF_FREQ_2350,
+        .rffc507x_enabled = 1,
+        //.rffc507x_inject = FOBOS_INJECT_LOW,
+        //.swap_iq = 1,
+        .rffc507x_inject = FOBOS_INJECT_HIGH,
+        .swap_iq = 0,
+    },
+    {
+        .idx = 4,
+        .freq_mhz_min = 3000,
+        .freq_mhz_max = 3100,
+        .preselect = FOBOS_PRESELECT_HIGHPASS,
+        .if_filter = FOBOS_IF_FILTER_LOW,
+        .if_freq_mhz = FOBOS_IF_FREQ_2350,
+        .rffc507x_enabled = 1,
+        .rffc507x_inject = FOBOS_INJECT_HIGH,
+        .swap_iq = 0,
+    },
+    {
+        .idx = 5,
+        .freq_mhz_min = 3100,
+        .freq_mhz_max = 3200,
+        .preselect = FOBOS_PRESELECT_HIGHPASS,
+        .if_filter = FOBOS_IF_FILTER_HIGH,
+        .if_freq_mhz = FOBOS_IF_FREQ_2450,
+        .rffc507x_enabled = 1,
+        .rffc507x_inject = FOBOS_INJECT_HIGH,
+        .swap_iq = 0,
+    },
+    {
+        .idx = 6,
+        .freq_mhz_min = 3200,
+        .freq_mhz_max = 3400,
+        .preselect = FOBOS_PRESELECT_HIGHPASS,
+        .if_filter = FOBOS_IF_FILTER_LOW,
+        .if_freq_mhz = FOBOS_IF_FREQ_2350,
+        .rffc507x_enabled = 1,
+        .rffc507x_inject = FOBOS_INJECT_HIGH,
+        .swap_iq = 0,
+    },
+    {
+        .idx = 7,
+        .freq_mhz_min = 3400,
+        .freq_mhz_max = 3600,
+        .preselect = FOBOS_PRESELECT_HIGHPASS,
+        .if_filter = FOBOS_IF_FILTER_HIGH,
+        .if_freq_mhz = FOBOS_IF_FREQ_2450,
+        .rffc507x_enabled = 1,
+        .rffc507x_inject = FOBOS_INJECT_HIGH,
+        .swap_iq = 0,
+    },
+    {
+        .idx = 8,
+        .freq_mhz_min = 3600,
+        .freq_mhz_max = 4000,
+        .preselect = FOBOS_PRESELECT_HIGHPASS,
+        .if_filter = FOBOS_IF_FILTER_LOW,
+        .if_freq_mhz = FOBOS_IF_FREQ_2350,
+        .rffc507x_enabled = 1,
+        .rffc507x_inject = FOBOS_INJECT_HIGH,
+        .swap_iq = 0,
+    },
+    {
+        .idx = 9,
+        .freq_mhz_min = 4000,
+        .freq_mhz_max = 4800,
+        .preselect = FOBOS_PRESELECT_HIGHPASS,
+        .if_filter = FOBOS_IF_FILTER_HIGH,
+        .if_freq_mhz = FOBOS_IF_FREQ_2450,
+        .rffc507x_enabled = 1,
+        .rffc507x_inject = FOBOS_INJECT_HIGH,
+        .swap_iq = 0,
+    },
+    {
+        .idx = 10,
+        .freq_mhz_min = 4800,
+        .freq_mhz_max = 6900,
+        .preselect = FOBOS_PRESELECT_HIGHPASS,
+        .if_filter = FOBOS_IF_FILTER_LOW,
+        .if_freq_mhz = FOBOS_IF_FREQ_2350,
+        .rffc507x_enabled = 1,
+        .rffc507x_inject = FOBOS_INJECT_HIGH,
+        .swap_iq = 0,
+    },
+};
 //==============================================================================
 int fobos_rx_set_frequency(struct fobos_dev_t * dev, double value, double * actual)
 {
@@ -987,141 +1174,117 @@ int fobos_rx_set_frequency(struct fobos_dev_t * dev, double value, double * actu
     }
     if (dev->rx_frequency != value)
     {
-        double rx_frequency = 0.0;
+        size_t count = sizeof(fobos_rx_bands) / sizeof(fobos_rx_bands[0]);
+        uint32_t freq_mhz = (uint32_t)(value / 1E6 + 0.5);
+        size_t idx = count;
+        for (size_t i = 0; i < count; i++)
+        {
+            if ((freq_mhz >= fobos_rx_bands[i].freq_mhz_min) && (freq_mhz <= fobos_rx_bands[i].freq_mhz_max))
+            {
+                idx = i;
+                break;
+            }
+        }
+        if (idx == count)
+        {
+            return FOBOS_ERR_UNSUPPORTED;
+        }
+        if (dev->rx_frequency_band != idx)
+        {
+            switch (fobos_rx_bands[idx].preselect)
+            {
+                case FOBOS_PRESELECT_BYPASS:
+                {
+                    bitclear(dev->dev_gpo, FOBOS_DEV_PRESEL_V1);
+                    bitclear(dev->dev_gpo, FOBOS_DEV_PRESEL_V2);
+                    bitclear(dev->dev_gpo, FOBOS_DEV_LNA_LP_SHD); // shut down both lnas
+                    bitclear(dev->dev_gpo, FOBOS_DEV_LNA_HP_SHD); // shut down both lnas
+                    break;
+                }
+                case FOBOS_PRESELECT_LOWPASS:
+                {
+                    bitset(dev->dev_gpo, FOBOS_DEV_PRESEL_V1);
+                    bitclear(dev->dev_gpo, FOBOS_DEV_PRESEL_V2);
+                    bitclear(dev->dev_gpo, FOBOS_DEV_LNA_LP_SHD); // enable lowpass lna
+                    bitset(dev->dev_gpo, FOBOS_DEV_LNA_HP_SHD);   // shut down highpass lna
+                    break;
+                }
+                case FOBOS_PRESELECT_HIGHPASS:
+                {
+                    bitclear(dev->dev_gpo, FOBOS_DEV_PRESEL_V1);
+                    bitset(dev->dev_gpo, FOBOS_DEV_PRESEL_V2);
+                    bitset(dev->dev_gpo, FOBOS_DEV_LNA_LP_SHD);   // shut down lowpass lna
+                    bitclear(dev->dev_gpo, FOBOS_DEV_LNA_HP_SHD); // enable highpass lna
+                    break;
+                }
+            }
+            switch (fobos_rx_bands[idx].if_filter)
+            {
+                case FOBOS_IF_FILTER_NONE:
+                {
+                    bitclear(dev->dev_gpo, FOBOS_DEV_IF_V1);
+                    bitclear(dev->dev_gpo, FOBOS_DEV_IF_V2);
+                    bitset(dev->dev_gpo, FOBOS_MAX2830_ANTSEL);
+                    break;
+                }
+                case FOBOS_IF_FILTER_LOW:
+                {
+                    bitset(dev->dev_gpo, FOBOS_DEV_IF_V1);
+                    bitclear(dev->dev_gpo, FOBOS_DEV_IF_V2);
+                    bitclear(dev->dev_gpo, FOBOS_MAX2830_ANTSEL);
+                    break;
+                }
+                case FOBOS_IF_FILTER_HIGH:
+                {
+                    bitclear(dev->dev_gpo, FOBOS_DEV_IF_V1);
+                    bitset(dev->dev_gpo, FOBOS_DEV_IF_V2);
+                    bitclear(dev->dev_gpo, FOBOS_MAX2830_ANTSEL);
+                    break;
+                }
+            }
+            fobos_rx_set_dev_gpo(dev, dev->dev_gpo);   // commit dev_gpo value
+            fobos_rffc507x_clock(dev, fobos_rx_bands[idx].rffc507x_enabled);
+            fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x15], 14, 14, fobos_rx_bands[idx].rffc507x_enabled);
+            fobos_rffc507x_commit(dev, 0);
+            dev->rx_frequency_band = idx;
+        }
+        dev->rx_swap_iq = fobos_rx_bands[idx].swap_iq;
 
-        uint32_t RFFC5071_freq_mhz;
-        uint64_t RFFC5071_freq_hz_actual;
-
-        uint64_t freq = (uint64_t)value;
-
-        uint32_t freq_mhz = freq / 1000000;
         double max2830_freq = 0.0;
         double max2830_freq_actual = 0.0;
-
-        if (freq_mhz < FOBOS_MAX_LP_FREQ_MHZ)
+        uint64_t RFFC5071_freq;
+        uint64_t RFFC5071_freq_hz_actual;
+        double rx_frequency = 0.0;
+        switch (fobos_rx_bands[idx].rffc507x_inject)
         {
-            if (dev->rx_frequency_band != 1)
+            case FOBOS_INJECT_NONE:
             {
-                dev->rx_frequency_band = 1;
-                // set_preselect(lowpass);
-                bitset(dev->dev_gpo, FOBOS_DEV_PRESEL_V1);
-                bitclear(dev->dev_gpo, FOBOS_DEV_PRESEL_V2);
-                // enable lowpass lna
-                bitclear(dev->dev_gpo, FOBOS_DEV_LNA_LP_SHD);
-                // shut down highpass lna
-                bitset(dev->dev_gpo, FOBOS_DEV_LNA_HP_SHD);
-                // set_if_filter(high);
-                bitclear(dev->dev_gpo, FOBOS_DEV_IF_V1);
-                bitset(dev->dev_gpo, FOBOS_DEV_IF_V2);
-                // turn on max2830 ant1 (main) input, turn off ant2 (aux) input
-                bitclear(dev->dev_gpo, FOBOS_MAX2830_ANTSEL);
-                // commit dev_gpo value
-                fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
-                // enable rffc507x clock
-                fobos_rffc507x_clock(dev, 1);
-            }
-            int upcon = 1;
-            if (upcon)
-            {
-                dev->rx_swap_iq = 1;
-                // set frequencies
-                uint32_t max2830_mhz = 2450;
-                RFFC5071_freq_mhz = max2830_mhz + freq_mhz;
-                RFFC5071_freq_mhz = (RFFC5071_freq_mhz / 5) * 5; // spures prevention
-                fobos_rffc507x_set_lo_frequency(dev, RFFC5071_freq_mhz, &RFFC5071_freq_hz_actual);
-                max2830_freq = (double)(RFFC5071_freq_hz_actual - freq);
+                max2830_freq = value;
                 fobos_max2830_set_frequency(dev, max2830_freq, &max2830_freq_actual);
+                rx_frequency = max2830_freq_actual;
+                result = FOBOS_ERR_OK;
+                break;
+            }
+            case FOBOS_INJECT_LOW:
+            {
+                max2830_freq = fobos_rx_bands[idx].if_freq_mhz * 1E6;
+                fobos_max2830_set_frequency(dev, max2830_freq, &max2830_freq_actual);
+                RFFC5071_freq = (uint64_t)max2830_freq_actual + (uint64_t)value;
+                fobos_rffc507x_set_lo_frequency_hz(dev, RFFC5071_freq, &RFFC5071_freq_hz_actual);
                 rx_frequency = RFFC5071_freq_hz_actual - max2830_freq_actual;
+                result = FOBOS_ERR_OK;
+                break;
             }
-            else
+            case FOBOS_INJECT_HIGH:
             {
-                dev->rx_swap_iq = 0;
-                // set frequencies
-                uint32_t max2830_mhz = 2400;
-                RFFC5071_freq_mhz = max2830_mhz - freq_mhz;
-                RFFC5071_freq_mhz = (RFFC5071_freq_mhz / 5) * 5; // spures prevention
-                fobos_rffc507x_set_lo_frequency(dev, RFFC5071_freq_mhz, &RFFC5071_freq_hz_actual);
-                max2830_freq = (double)(RFFC5071_freq_hz_actual + freq);
+                max2830_freq = fobos_rx_bands[idx].if_freq_mhz * 1E6;
                 fobos_max2830_set_frequency(dev, max2830_freq, &max2830_freq_actual);
-                rx_frequency = max2830_freq_actual - RFFC5071_freq_hz_actual;
+                RFFC5071_freq = (uint64_t)value - (uint64_t)max2830_freq_actual;
+                fobos_rffc507x_set_lo_frequency_hz(dev, RFFC5071_freq, &RFFC5071_freq_hz_actual);
+                rx_frequency = RFFC5071_freq_hz_actual + max2830_freq_actual;
+                result = FOBOS_ERR_OK;
+                break;
             }
-            result = 0;
-        }
-        else if ((freq_mhz >= FOBOS_MIN_BP_FREQ_MHZ) && (freq_mhz <= FOBOS_MAX_BP_FREQ_MHZ))
-        {
-            if (dev->rx_frequency_band != 2)
-            {
-                dev->rx_frequency_band = 2;
-                // set_preselect(bypass);
-                bitclear(dev->dev_gpo, FOBOS_DEV_PRESEL_V1);
-                bitclear(dev->dev_gpo, FOBOS_DEV_PRESEL_V2);
-                // shut down both lnas
-                bitclear(dev->dev_gpo, FOBOS_DEV_LNA_LP_SHD);
-                bitclear(dev->dev_gpo, FOBOS_DEV_LNA_HP_SHD);
-                // set_invert_iq(false);
-                dev->rx_swap_iq = 0;
-                // set_if_filter(none);
-                bitclear(dev->dev_gpo, FOBOS_DEV_IF_V1);
-                bitclear(dev->dev_gpo, FOBOS_DEV_IF_V2);
-                // turn on max2830 ant2 (diversity) input
-                bitset(dev->dev_gpo, FOBOS_MAX2830_ANTSEL);
-                // commit dev_gpo value
-                fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
-                // disable rffc507x
-                fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[21], 14, 14, 0); // enbl = 0
-                fobos_rffc507x_commit(dev, 0);
-                // disable rffc507x clock
-                fobos_rffc507x_clock(dev, 0);
-            }
-            // set frequency direct to max2830
-            max2830_freq = value;
-            fobos_max2830_set_frequency(dev, max2830_freq, &max2830_freq_actual);
-            rx_frequency = max2830_freq_actual;
-            result = 0;
-        }
-        else if ((freq_mhz >= FOBOS_MIN_HP_FREQ_MHZ) && (freq_mhz <= FOBOS_MAX_HP_FREQ_MHZ))
-        {
-            // set_preselect(hipass);
-            bitclear(dev->dev_gpo, FOBOS_DEV_PRESEL_V1);
-            bitset(dev->dev_gpo, FOBOS_DEV_PRESEL_V2);
-            // set_invert_iq(true);
-            dev->rx_swap_iq = 1;
-            uint32_t max2830_mhz = 2350;
-            if ((freq_mhz >= 4550) && (freq_mhz <= 4750))
-            {
-                // set_if_filter(high);
-                bitclear(dev->dev_gpo, FOBOS_DEV_IF_V1);
-                bitset(dev->dev_gpo, FOBOS_DEV_IF_V2);
-                max2830_mhz = 2450;
-            }
-            else
-            {
-                // set_if_filter(low);
-                bitset(dev->dev_gpo, FOBOS_DEV_IF_V1);
-                bitclear(dev->dev_gpo, FOBOS_DEV_IF_V2);
-                max2830_mhz = 2350;
-            }
-            // turn on max2830 ant1 (main) input
-            bitclear(dev->dev_gpo, FOBOS_MAX2830_ANTSEL);
-            // commit dev_gpo value
-            fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
-            if (dev->rx_frequency_band != 3)
-            {
-                dev->rx_frequency_band = 3;
-
-                // enable rffc507x clock
-                fobos_rffc507x_clock(dev, 1);
-            }
-            RFFC5071_freq_mhz = freq_mhz - max2830_mhz;
-            fobos_rffc507x_set_lo_frequency(dev, RFFC5071_freq_mhz, &RFFC5071_freq_hz_actual);
-            max2830_freq = (double)(freq - RFFC5071_freq_hz_actual);
-            fobos_max2830_set_frequency(dev, max2830_freq, &max2830_freq_actual);
-            rx_frequency = max2830_freq_actual + RFFC5071_freq_hz_actual;
-            result = 0;
-        }
-        else
-        {
-            result = FOBOS_ERR_UNSUPPORTED;
         }
         if (result == FOBOS_ERR_OK)
         {
@@ -1149,8 +1312,16 @@ int fobos_rx_set_direct_sampling(struct fobos_dev_t * dev, unsigned int enabled)
     {
         if (enabled)
         {
-            bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-            bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+            if (dev->hw_revision[0] == '2')
+            {
+                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+            }
+            else
+            {
+                bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+                bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+            }
             bitclear(dev->dev_gpo, FOBOS_DEV_NENBL_HF);
             fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
             // disable clocks
@@ -1168,13 +1339,21 @@ int fobos_rx_set_direct_sampling(struct fobos_dev_t * dev, unsigned int enabled)
             {
                 dev->rx_lpf_idx = 2;
             }
-            if (dev->rx_lpf_idx & 1)
+            if (dev->hw_revision[0] == '2')
             {
-                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+                if (dev->rx_lpf_idx & 1)
+                {
+                    bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+                }
+                if (dev->rx_lpf_idx & 2)
+                {
+                    bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+                }
             }
-            if (dev->rx_lpf_idx & 2)
+            else
             {
                 bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
             }
             bitset(dev->dev_gpo, FOBOS_DEV_NENBL_HF);
             fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
@@ -1233,9 +1412,123 @@ int fobos_rx_set_vga_gain(struct fobos_dev_t * dev, unsigned int value)
     return result;
 }
 //==============================================================================
+int fobos_rx_set_lpf(struct fobos_dev_t * dev, double bandwidth)
+{
+    int result = fobos_check(dev);
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%f)\n", __FUNCTION__, bandwidth);
+#endif // FOBOS_PRINT_DEBUG
+    if (result != FOBOS_ERR_OK)
+    {
+        return result;
+    }
+    result = 0;
+    int rx_lpf_idx = dev->rx_lpf_idx;
+    if (!dev->rx_direct_sampling)
+    {
+        bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+        bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+        if (dev->hw_revision[0] == '2')
+        {
+            if (bandwidth < 13000000.0)
+            {
+                rx_lpf_idx = 0;
+            }
+            else if (bandwidth < 26000000.0)
+            {
+                rx_lpf_idx = 1;
+            }
+            else
+            {
+                rx_lpf_idx = 2;
+            }
+            if (rx_lpf_idx & 1)
+            {
+                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+            }
+            if (rx_lpf_idx & 2)
+            {
+                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+            }
+        }
+        else
+        {
+            bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+            bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+        }
+        fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
+    }
+    dev->rx_lpf_idx = rx_lpf_idx;
+    return result;
+}
+//==============================================================================
+const double fobos_max2830_bws[] =
+{
+    2.0 * 7.5E6, 2.0 * 8.5E6, 2.0 * 15.0E6, 2.0 * 18.0E6
+};
+//==============================================================================
+const double fobos_max2830_adj[] =
+{
+    0.90, 0.95, 1.00, 1.05, 1.10
+};
+//==============================================================================
+int fobos_rx_set_bandwidth(struct fobos_dev_t * dev, double value, double * actual)
+{
+    int result = fobos_check(dev);
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%f)\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
+    if (result != FOBOS_ERR_OK)
+    {
+        return result;
+    }
+    result = 0;
+    uint32_t p1 = 0;
+    size_t count = sizeof(fobos_max2830_bws) / sizeof(fobos_max2830_bws[0]);
+    double dmin = value;
+    size_t idx = 0;
+    for (size_t i = 0; i < count; i++)
+    {
+        double df = fabs(value - fobos_max2830_bws[i]);
+        if (df < dmin)
+        {
+            dmin = df;
+            idx = i;
+        }
+    }
+    count = sizeof(fobos_max2830_adj) / sizeof(fobos_max2830_adj[0]);
+    dmin = value;
+    size_t adj = 0;
+    for (size_t i = 0; i < count; i++)
+    {
+        double bw = fobos_max2830_bws[idx] * fobos_max2830_adj[i];
+        double df = fabs(value - bw);
+        if (df < dmin)
+        {
+            dmin = df;
+            adj = i;
+        }
+    }
+    if (actual)
+    {
+        *actual = fobos_max2830_bws[idx] * fobos_max2830_adj[adj];
+    }
+    if (dev->rx_bw_idx != idx)
+    {
+        dev->rx_bw_idx = idx;
+        fobos_max2830_write_reg(dev, 8, idx | 0x3420);
+    }
+    if (dev->rx_bw_adj != adj)
+    {
+        dev->rx_bw_adj = adj;
+        fobos_max2830_write_reg(dev, 7, adj | 0x0020);
+    }
+    return result;
+}
+//==============================================================================
 const double fobos_sample_rates[] =
 {
-    //80000000.0,
+    80000000.0,
     50000000.0,
     40000000.0,
     32000000.0,
@@ -1244,11 +1537,7 @@ const double fobos_sample_rates[] =
     16000000.0,
     12500000.0,
     10000000.0,
-    8000000.0,
-    6400000.0,
-    6250000.0,
-    5000000.0,
-    4000000.0
+    8000000.0
 };
 //==============================================================================
 int fobos_rx_get_samplerates(struct fobos_dev_t * dev, double * values, unsigned int * count)
@@ -1272,8 +1561,8 @@ int fobos_rx_get_samplerates(struct fobos_dev_t * dev, double * values, unsigned
 //==============================================================================
 const uint32_t fobos_p1s[] =
 {
-    //10, 
-    16, 20, 25, 32, 40, 50, 64, 80, 100, 125, 128, 160, 200
+    10, 
+    16, 20, 25, 32, 40, 50, 64, 80, 100
 };
 //==============================================================================
 int fobos_rx_set_samplerate(struct fobos_dev_t * dev, double value, double * actual)
@@ -1306,97 +1595,14 @@ int fobos_rx_set_samplerate(struct fobos_dev_t * dev, double value, double * act
     value = fobos_sample_rates[i_min];
     if (result == 0)
     {
-        int rx_lpf_idx = dev->rx_lpf_idx;
-        if (value < 13000000.0)
-        {
-            rx_lpf_idx = 0;
-        }
-        else if (value < 26000000.0)
-        {
-            rx_lpf_idx = 1;
-        }
-        else
-        {
-            rx_lpf_idx = 2;
-        }
-        if (!dev->rx_direct_sampling)
-        {
-            bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-            bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-            if (rx_lpf_idx & 1)
-            {
-                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-            }
-            if (rx_lpf_idx & 2)
-            {
-                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-            }
-            fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
-        }
-        dev->rx_lpf_idx = rx_lpf_idx;
-        int rx_bw_idx = dev->rx_bw_idx;
-        if (value < 15000000.0)
-        {
-            rx_bw_idx = 0;
-        }
-        else if (value < 17000000.0)
-        {
-            rx_bw_idx = 1;
-        }
-        else if (value < 30000000.0)
-        {
-            rx_bw_idx = 2;
-        }
-        else
-        {
-            rx_bw_idx = 3;
-        }
-        if (dev->rx_bw_idx != rx_bw_idx)
-        {
-            dev->rx_bw_idx = rx_bw_idx;
-            fobos_max2830_write_reg(dev, 8, rx_bw_idx | 0x3420);
-        }
-#ifdef FOBOS_PRINT_DEBUG
-        printf_internal("lpf_idx =  %i bw_idx = %i\n", rx_lpf_idx, rx_bw_idx);
-#endif // FOBOS_PRINT_DEBUG
+        double bandwidth = value * 0.8;
+        fobos_rx_set_lpf(dev, bandwidth);
+        fobos_rx_set_bandwidth(dev, bandwidth, 0);
         dev->rx_samplerate = value;
         if (actual)
         {
             *actual = dev->rx_samplerate;
         }
-    }
-    return result;
-}
-//==============================================================================
-int fobos_rx_set_lpf(struct fobos_dev_t * dev, int value)
-{
-    int result = fobos_check(dev);
-#ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s(%d)\n", __FUNCTION__, value);
-#endif // FOBOS_PRINT_DEBUG
-    if (result != FOBOS_ERR_OK)
-    {
-        return result;
-    }
-    if (value < 0) value = 0;
-    if (value > 2) value = 2;
-    if (dev->rx_lpf_idx != value)
-    {
-        if (!dev->rx_direct_sampling)
-        {
-            bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-            bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-            if (value & 1)
-            {
-                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-            }
-            if (value & 2)
-            {
-                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-            }
-            fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
-        }
-        dev->rx_lpf_idx = value;
     }
     return result;
 }
@@ -1423,6 +1629,60 @@ int fobos_rx_set_clk_source(struct fobos_dev_t * dev, int value)
     return result;
 }
 //==============================================================================
+void fobos_rx_calibrate(struct fobos_dev_t * dev, void * data, size_t size)
+{
+    size_t complex_samples_count = size / 4;
+    int16_t * psample = (int16_t *)data;
+    int64_t summ_re = 0ll;
+    int64_t summ_im = 0ll;
+    size_t chunks_count = complex_samples_count / 4;
+    for (size_t i = 0; i < chunks_count; i++)
+    {
+        summ_re += psample[0];
+        summ_im += psample[1];
+        summ_re += psample[2];
+        summ_im += psample[3];
+        summ_re += psample[4];
+        summ_im += psample[5];
+        summ_re += psample[6];
+        summ_im += psample[7];
+        psample += 8;
+    }
+    summ_re /= complex_samples_count;
+    summ_im /= complex_samples_count;
+    int16_t avg_re = summ_re;
+    int16_t avg_im = summ_im;
+    psample = (int16_t *)data;
+    for (size_t i = 0; i < chunks_count; i++)
+    {
+        summ_re += abs(psample[0] - avg_re);
+        summ_im += abs(psample[1] - avg_im);
+        summ_re += abs(psample[2] - avg_re);
+        summ_im += abs(psample[3] - avg_im);
+        summ_re += abs(psample[4] - avg_re);
+        summ_im += abs(psample[5] - avg_im);
+        summ_re += abs(psample[6] - avg_re);
+        summ_im += abs(psample[7] - avg_im);
+        psample += 8;
+    }
+    dev->rx_avg_re += 0.001f* ((float)summ_re - dev->rx_avg_re);
+    dev->rx_avg_im += 0.001f* ((float)summ_im - dev->rx_avg_im);
+    if ((dev->rx_avg_re > 0.0f) && (dev->rx_avg_im > 0.0f) && !dev->rx_direct_sampling)
+    {
+        float ratio = dev->rx_avg_re / dev->rx_avg_im;
+#ifdef FOBOS_PRINT_DEBUG
+        if (dev->rx_buff_counter % 128 == 0)
+        {
+            printf_internal("re/im scale = %f\n", ratio);
+        }
+#endif // FOBOS_PRINT_DEBUG
+        if ((ratio < 1.6f) && (ratio > 0.625f))
+        {
+            dev->rx_scale_im = dev->rx_scale_re * ratio;
+        }
+    }
+}
+//==============================================================================
 #define FOBOS_SWAP_IQ_HW 1
 void fobos_rx_convert_samples(struct fobos_dev_t * dev, void * data, size_t size, float * dst_samples)
 {
@@ -1430,16 +1690,19 @@ void fobos_rx_convert_samples(struct fobos_dev_t * dev, void * data, size_t size
     int16_t * psample = (int16_t *)data;
     int rx_swap_iq = dev->rx_swap_iq ^ FOBOS_SWAP_IQ_HW;
     float sample = 0.0f;
-    float scale_re = dev->rx_scale_re;
-    float scale_im = dev->rx_scale_im;
+    float scale_re = 1.0f / 32786.0f;
+    float scale_im = 1.0f / 32786.0f;
     if (dev->rx_direct_sampling)
     {
-        scale_re = 1.0f / 32786.0f;
-        scale_im = 1.0f / 32786.0f;
-        rx_swap_iq = 0;
+        rx_swap_iq = FOBOS_SWAP_IQ_HW;
     }
-    float d;
-    float k = 0.001f;
+    else
+    {
+        fobos_rx_calibrate(dev, data, size / 16);
+        scale_re = dev->rx_scale_re;
+        scale_im = dev->rx_scale_im;
+    }
+    float k = 0.005f;
     float dc_re = dev->rx_dc_re;
     float dc_im = dev->rx_dc_im;
     float * dst_re = dst_samples;
@@ -1455,197 +1718,40 @@ void fobos_rx_convert_samples(struct fobos_dev_t * dev, void * data, size_t size
         // 0
         sample = (psample[0] & 0x3FFF) * scale_re;
         dc_re += k * (sample - dc_re);
-        dst_re[0] = sample - dc_re;
-
+        sample -= dc_re;
+        dst_re[0] = sample;
         sample = (psample[1] & 0x3FFF) * scale_im;
         dc_im += k * (sample - dc_im);
-        dst_im[0] = sample - dc_im;
-
+        sample -= dc_im;
+        dst_im[0] = sample;
         // 1
         dst_re[2] = (psample[2] & 0x3FFF) * scale_re - dc_re;
         dst_im[2] = (psample[3] & 0x3FFF) * scale_im - dc_im;
-
         // 2
         dst_re[4] = (psample[4] & 0x3FFF) * scale_re - dc_re;
         dst_im[4] = (psample[5] & 0x3FFF) * scale_im - dc_im;
-
         // 3
         dst_re[6] = (psample[6] & 0x3FFF) * scale_re - dc_re;
         dst_im[6] = (psample[7] & 0x3FFF) * scale_im - dc_im;
-
         // 4
         dst_re[8] = (psample[8] & 0x3FFF) * scale_re - dc_re;
         dst_im[8] = (psample[9] & 0x3FFF) * scale_im - dc_im;
-
         // 5
         dst_re[10] = (psample[10] & 0x3FFF) * scale_re - dc_re;
         dst_im[10] = (psample[11] & 0x3FFF) * scale_im - dc_im;
-
         // 6
         dst_re[12] = (psample[12] & 0x3FFF) * scale_re - dc_re;
         dst_im[12] = (psample[13] & 0x3FFF) * scale_im - dc_im;
-
         // 7
         dst_re[14] = (psample[14] & 0x3FFF) * scale_re - dc_re;
         dst_im[14] = (psample[15] & 0x3FFF) * scale_im - dc_im;
-
+        //
         dst_re += 16;
         dst_im += 16;
         psample += 16;
     }
     dev->rx_dc_re = dc_re;
     dev->rx_dc_im = dc_im;
-}
-//==============================================================================
-void fobos_rx_proceed_calibration(struct fobos_dev_t * dev, void * data, uint32_t size)
-{
-#ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s(%d)\n", __FUNCTION__, size);
-#endif // FOBOS_PRINT_DEBUG
-    size_t complex_samples_count = size / 4;
-
-    int64_t summ_re = 0ll;
-    int64_t summ_im = 0ll;
-    int16_t * psample = (int16_t *)data;
-    float * dst_re = dev->rx_buff;
-    float * dst_im = dev->rx_buff + 1;
-    for (size_t i = 0; i < complex_samples_count; i++)
-    {
-        int16_t re = *psample;
-        re &= 0x3FFF;
-        *dst_re = re;
-        summ_re += re;
-        dst_re += 2;
-        psample++;
-        int16_t im = *psample;
-        im &= 0x3FFF;
-        *dst_im = im;
-        summ_im += im;
-        dst_im += 2;
-        psample++;
-    }
-    float dc_re = (float)summ_re / (float)complex_samples_count;
-    float dc_im = (float)summ_im / (float)complex_samples_count;
-
-    psample = (int16_t *)data;
-    dst_re = dev->rx_buff;
-    dst_im = dev->rx_buff + 1;
-    double avg_abs_re = 0.0;
-    double avg_abs_im = 0.0;
-    for (size_t i = 0; i < complex_samples_count; i++)
-    {
-        *dst_re -= dc_re;
-        float re = fabsf(*dst_re);
-        dst_re += 2;
-        *dst_im -= dc_im;
-        float im = fabsf(*dst_im);
-        dst_im += 2;
-        avg_abs_re += re;
-        avg_abs_im += im;
-    }
-
-    if ((avg_abs_re > 0.0f) && (avg_abs_im > 0.0f))
-    {
-        avg_abs_re /= (double)complex_samples_count;
-        avg_abs_im /= (double)complex_samples_count;
-        float scale_re = 1.0f / 32786.0f;
-        float scale_im = scale_re * avg_abs_re / avg_abs_im;
-#ifdef FOBOS_PRINT_DEBUG
-        printf_internal("[%d] im/re scale = %f\n", dev->rx_calibration_pos, scale_im / scale_re);
-#endif // FOBOS_PRINT_DEBUG
-        if (dev->rx_calibration_pos == 0)
-        {
-            dev->rx_scale_re = scale_re;
-            dev->rx_scale_im = scale_im;
-        }
-        else
-        {
-            float k = 0.1f;
-            dev->rx_scale_re += k * (scale_re - dev->rx_scale_re);
-            dev->rx_scale_im += k * (scale_im - dev->rx_scale_im);
-        }
-    }
-}
-//==============================================================================
-int fobos_rx_set_calibration(struct fobos_dev_t * dev, int state)
-{
-    int result = fobos_check(dev);
-    if (result != FOBOS_ERR_OK)
-    {
-        return result;
-    }
-    if (dev->rx_calibration_state != state)
-    {
-        switch (state)
-        {
-            case 0:
-            {
-                dev->rx_calibration_state = 0;
-                dev->rx_calibration_pos = 0;
-            }
-            break;
-
-            case 1: // "remove dc" calibration state
-            {
-                dev->rx_calibration_state = 1;
-                dev->rx_calibration_pos = 0;
-                if (dev->rx_direct_sampling)
-                {
-                    // turn on lpf
-                    bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-                    bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-                    if (dev->rx_lpf_idx & 1)
-                    {
-                        bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-                    }
-                    if (dev->rx_lpf_idx & 2)
-                    {
-                        bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-                    }
-                    fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
-                    // enable clocks
-                    fobos_rffc507x_clock(dev, 1);
-                    fobos_max2830_clock(dev, 1);
-                    // enable rffc507x
-                    fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x15], 14, 14, 1); // enbl = 1
-                    fobos_rffc507x_commit(dev, 0);
-                }
-                // shut down both lnas
-                bitclear(dev->dev_gpo, FOBOS_DEV_LNA_LP_SHD);
-                bitclear(dev->dev_gpo, FOBOS_DEV_LNA_HP_SHD);
-                // set_if_filter(high);
-                bitclear(dev->dev_gpo, FOBOS_DEV_IF_V1);
-                bitset(dev->dev_gpo, FOBOS_DEV_IF_V2);
-                // turn on max2830 ant1 (main) input, turn off ant2 (aux) input
-                bitclear(dev->dev_gpo, FOBOS_MAX2830_ANTSEL);
-                // commit dev_gpo value
-                fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
-                // set frequency direct to max2830
-                fobos_max2830_set_frequency(dev, 2400000000.0, 0);
-                // disable rffc507x
-                fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x15], 14, 14, 0); // enbl = 0
-                fobos_rffc507x_commit(dev, 0);
-                // set frequency direct rffc507x
-                fobos_rffc507x_set_lo_frequency(dev, 2401, 0);
-            }
-            break;
-            case 2:
-            {
-                double f = dev->rx_frequency;
-                dev->rx_frequency = 0.0;
-                dev->rx_frequency_band = 0;
-                fobos_rx_set_frequency(dev, f, 0);
-                if (dev->rx_direct_sampling)
-                {
-                    dev->rx_direct_sampling = 0;
-                    fobos_rx_set_direct_sampling(dev, 1);
-                }
-                dev->rx_calibration_state = 2;
-            }
-            break;
-        }
-    }
-    return result;
 }
 //==============================================================================
 int fobos_alloc_buffers(struct fobos_dev_t *dev)
@@ -1777,30 +1883,18 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
     {
         if (transfer->actual_length == (int)dev->transfer_buf_size)
         {
+            //printf_internal(".");
             dev->rx_buff_counter++;
-            if ((dev->rx_calibration_state == 1) && (dev->rx_calibration_pos < 4))
+            fobos_rx_convert_samples(dev, transfer->buffer, transfer->actual_length, dev->rx_buff);
+            size_t complex_samples_count = transfer->actual_length / 4;
+            if (dev->rx_cb)
             {
-                fobos_rx_proceed_calibration(dev, transfer->buffer, transfer->actual_length);
-                dev->rx_calibration_pos++;
-            }
-            else
-            {
-                //ULONGLONG t0, t1;
-                //QueryPerformanceCounter(&t0);
-                fobos_rx_convert_samples(dev, transfer->buffer, transfer->actual_length, dev->rx_buff);
-                size_t complex_samples_count = transfer->actual_length / 4;
-                if (dev->rx_cb)
-                {
-                    dev->rx_cb(dev->rx_buff, complex_samples_count, dev->rx_cb_ctx);
-                }
-                //QueryPerformanceCounter(&t1);
-                //double dt = (t1 - t0);
-                //printf("%f\n", dt);
+                dev->rx_cb(dev->rx_buff, complex_samples_count, dev->rx_cb_ctx);
             }
         }
         else
         {
-            printf_internal("E");-
+            printf_internal("E");
             dev->rx_failures++;
         }
         libusb_submit_transfer(transfer);
@@ -1850,8 +1944,8 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
     dev->rx_buff_counter = 0;
     dev->rx_cb = cb;
     dev->rx_cb_ctx = ctx;
-    dev->rx_calibration_state = 0;
-    fobos_rx_set_calibration(dev, 1); // start calibration
+    dev->rx_avg_re = 0.0f;
+    dev->rx_avg_im = 0.0f;
     if (buf_count == 0)
     {
         buf_count = FOBOS_DEF_BUF_COUNT;
@@ -1909,14 +2003,7 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
     dev->rx_async_status = FOBOS_RUNNING;
     while (FOBOS_IDDLE != dev->rx_async_status)
     {
-        if (dev->rx_calibration_state == 1)
-        {
-            if (dev->rx_calibration_pos >= 4)
-            {
-                fobos_rx_set_calibration(dev, 2);
-            }
-        }
-        //printf_internal(".");
+        //printf_internal("X");
         result = libusb_handle_events_timeout_completed(dev->libusb_ctx, &tv1, &dev->rx_async_cancel);
         if (result < 0)
         {
@@ -1945,11 +2032,14 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
                     continue;
                 if (LIBUSB_TRANSFER_CANCELLED != dev->transfer[i]->status)
                 {
+                    struct libusb_transfer * xf = dev->transfer[i];
+                    //printf_internal(" ~%08x", xf->flags);
+
                     result = libusb_cancel_transfer(dev->transfer[i]);
                     libusb_handle_events_timeout_completed(dev->libusb_ctx, &tvx, NULL);
                     if (result < 0)
                     {
-                        printf_internal("libusb_cancel_transfer[%d] returned: %d\n", i, result);
+                        printf_internal("libusb_cancel_transfer[%d] returned: %d %s\n", i, result, libusb_error_name(result));
                         continue;
                     }
                     dev->rx_async_status = FOBOS_CANCELING;
@@ -1993,7 +2083,6 @@ int fobos_rx_cancel_async(struct fobos_dev_t * dev)
 //==============================================================================
 int fobos_rx_start_sync(struct fobos_dev_t * dev, uint32_t buf_length)
 {
-    int calib_count = 4;
     int i = 0;
     int actual = 0;
     int result = fobos_check(dev);
@@ -2028,28 +2117,6 @@ int fobos_rx_start_sync(struct fobos_dev_t * dev, uint32_t buf_length)
     fobos_fx3_command(dev, 0xE1, 1, 0);        // start fx
     bitclear(dev->dev_gpo, FOBOS_DEV_ADC_SDI);
     fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
-    dev->rx_calibration_state = 0;
-    fobos_rx_set_calibration(dev, 1); // start calibration
-    for (i = 0; i < calib_count; i++)
-    {
-        dev->rx_calibration_pos = i;
-        result = libusb_bulk_transfer(
-            dev->libusb_devh,
-            LIBUSB_BULK_IN_ENDPOINT,
-            dev->rx_sync_buf,
-            dev->transfer_buf_size,
-            &actual,
-            LIBUSB_BULK_TIMEOUT);
-        if (result == 0)
-        {
-            fobos_rx_proceed_calibration(dev, dev->rx_sync_buf, dev->transfer_buf_size);
-        }
-        else
-        {
-            break;
-        }
-    }
-    fobos_rx_set_calibration(dev, 2); // end calibration
     dev->rx_sync_started = 1;
     return FOBOS_ERR_OK;
 }

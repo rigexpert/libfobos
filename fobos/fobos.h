@@ -10,6 +10,9 @@
 //  2024.03.21
 //  2024.04.08
 //  2024.05.29 - sync mode (fobos_rx_start_sync, fobos_rx_read_sync, fobos_rx_stop_sync)
+//  2024.06.21 - update fow hw rev.3.0.0
+//  2024.07.08 - new band plan
+//  2024.07.20 - IQ calibration on the fly
 //==============================================================================
 #ifndef LIB_FOBOS_H
 #include <stdint.h>
@@ -57,26 +60,24 @@ API_EXPORT int CALL_CONV fobos_rx_set_frequency(struct fobos_dev_t * dev, double
 API_EXPORT int CALL_CONV fobos_rx_set_direct_sampling(struct fobos_dev_t * dev, unsigned int enabled);
 // low noise amplifier 0..2
 API_EXPORT int CALL_CONV fobos_rx_set_lna_gain(struct fobos_dev_t * dev, unsigned int value);
-// variable gain amplifier 0..31
+// variable gain amplifier 0..15
 API_EXPORT int CALL_CONV fobos_rx_set_vga_gain(struct fobos_dev_t * dev, unsigned int value);
 // get available sample rate list
 API_EXPORT int CALL_CONV fobos_rx_get_samplerates(struct fobos_dev_t * dev, double * values, unsigned int * count);
 // set sample rate nearest to specified
 API_EXPORT int CALL_CONV fobos_rx_set_samplerate(struct fobos_dev_t * dev, double value, double * actual);
-// set hardware low pass filter (0 .. 2)
-API_EXPORT int CALL_CONV fobos_rx_set_lpf(struct fobos_dev_t * dev, int value);
 // statr the iq rx streaming
 API_EXPORT int CALL_CONV fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, uint32_t buf_count, uint32_t buf_length);
 // stop the iq rx streaming
 API_EXPORT int CALL_CONV fobos_rx_cancel_async(struct fobos_dev_t * dev);
-// set user general purpose output bits (0x00 .. 0x3f)
+// set user general purpose output bits (0x00 .. 0xFF)
 API_EXPORT int CALL_CONV fobos_rx_set_user_gpo(struct fobos_dev_t * dev, uint8_t value);
 // clock source: 0 - internal (default), 1- extrnal
 API_EXPORT int CALL_CONV fobos_rx_set_clk_source(struct fobos_dev_t * dev, int value);
 // explicitly set the max2830 frequency, Hz (23500000000 .. 2550000000)
 API_EXPORT int CALL_CONV fobos_max2830_set_frequency(struct fobos_dev_t * dev, double value, double * actual);
-// explicitly set rffc507x frequency, MHz (25 .. 5400)
-API_EXPORT int CALL_CONV fobos_rffc507x_set_lo_frequency(struct fobos_dev_t * dev, int lo_freq_mhz, uint64_t * tune_freq_hz);
+// explicitly set rffc507x frequency, Hz (25000000 .. 5400000000)
+API_EXPORT int CALL_CONV fobos_rffc507x_set_lo_frequency_hz(struct fobos_dev_t * dev, uint64_t lo_freq, uint64_t * tune_freq_hz);
 // start synchronous rx mode
 API_EXPORT int CALL_CONV fobos_rx_start_sync(struct fobos_dev_t * dev, uint32_t buf_length);
 // read samples in synchronous rx mode
