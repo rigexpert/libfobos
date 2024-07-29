@@ -1,6 +1,6 @@
 # libfobos RigExpert Fobos SDR API
 
-This is the Fobos SDR receiver host software API shared library. Lightweight and easy to start. Full source code. Allpication examples.
+This is the Fobos SDR receiver host software API shared library. Lightweight and easy to start. Full source code. Application examples.
 
 ## Versions
 
