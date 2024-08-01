@@ -30,7 +30,7 @@ mkdir build
 cd build
 cmake ..
 make
-subo make install
+sudo make install
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
