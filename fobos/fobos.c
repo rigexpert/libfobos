@@ -14,6 +14,7 @@
 //  2024.07.08 - new band plan
 //  2024.07.20 - IQ calibration on the fly
 //  2025.01.16 - v.2.3.2 distinguishing the alternative firmware, fobos_rx_write_firmware()
+//  2025.01.19 - v.2.3.2 fobos_rx_reset()
 //==============================================================================
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
@@ -132,6 +133,7 @@ struct fobos_dev_t
     uint16_t rffc500x_registers_remote[31];
     int rx_sync_started;
     unsigned char * rx_sync_buf;
+    int do_reset;
 };
 //==============================================================================
 char * to_bin(uint16_t s16, char * str)
@@ -939,7 +941,7 @@ int fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index)
     return FOBOS_ERR_NO_DEV;
 }
 //==============================================================================
-int fobos_rx_close(struct fobos_dev_t * dev, int do_reset)
+int fobos_rx_close(struct fobos_dev_t * dev)
 {
     int result = fobos_check(dev);
 #ifdef FOBOS_PRINT_DEBUG
@@ -974,7 +976,7 @@ int fobos_rx_close(struct fobos_dev_t * dev, int do_reset)
     // disable clocks
     fobos_rffc507x_clock(dev, 0);
     fobos_max2830_clock(dev, 0);
-    if (do_reset)
+    if (dev->do_reset)
     {
         libusb_control_transfer(dev->libusb_devh, CTRLO, 0xE0, 0, 0, 0, 0, CTRL_TIMEOUT);
     }
@@ -982,6 +984,20 @@ int fobos_rx_close(struct fobos_dev_t * dev, int do_reset)
     libusb_exit(dev->libusb_ctx);
     free(dev);
     return result;
+}
+//==============================================================================
+int fobos_rx_reset(struct fobos_dev_t * dev)
+{
+    int result = fobos_check(dev);
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s();\n", __FUNCTION__);
+#endif // FOBOS_PRINT_DEBUG
+    if (result != FOBOS_ERR_OK)
+    {
+        return result;
+    }
+    dev->do_reset = 1;
+    return fobos_rx_close(dev);
 }
 //==============================================================================
 int fobos_rx_get_board_info(struct fobos_dev_t * dev, char * hw_revision, char * fw_version, char * manufacturer, char * product, char * serial)

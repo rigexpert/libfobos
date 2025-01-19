@@ -38,12 +38,12 @@ int main(int argc, char** argv)
                 if (strcmp(argv[1], "-w") == 0)
                 {
                     result = fobos_rx_write_firmware(dev, file_name, 1);
-                    fobos_rx_close(dev, 1);  // close the device with do_reset = 1 parameter to reboot in a new firmware
+                    fobos_rx_reset(dev);  // reboot in a new firmware
                 }
                 if (strcmp(argv[1], "-r") == 0)
                 {
                     result = fobos_rx_read_firmware(dev, file_name, 1);
-                    fobos_rx_close(dev, 0);  // close the device in regular mode
+                    fobos_rx_close(dev);  // close the device in regular mode
                 }
             }
             else

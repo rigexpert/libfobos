@@ -14,6 +14,7 @@
 //  2024.07.08 - new band plan
 //  2024.07.20 - IQ calibration on the fly
 //  2025.01.16 - v.2.3.2 distinguishing the alternative firmware, fobos_rx_write_firmware()
+//  2025.01.19 - v.2.3.2 fobos_rx_reset()
 //==============================================================================
 #ifndef LIB_FOBOS_H
 #include <stdint.h>
@@ -52,7 +53,9 @@ API_EXPORT int CALL_CONV fobos_rx_list_devices(char * serials);
 // open the specified device
 API_EXPORT int CALL_CONV fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index);
 // close device
-API_EXPORT int CALL_CONV fobos_rx_close(struct fobos_dev_t * dev, int do_reset);
+API_EXPORT int CALL_CONV fobos_rx_close(struct fobos_dev_t * dev);
+// close and reset device
+API_EXPORT int CALL_CONV fobos_rx_reset(struct fobos_dev_t * dev);
 // get the board info
 API_EXPORT int CALL_CONV fobos_rx_get_board_info(struct fobos_dev_t * dev, char * hw_revision, char * fw_version, char * manufacturer, char * product, char * serial);
 // set rx frequency, Hz
