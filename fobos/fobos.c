@@ -1729,10 +1729,6 @@ void fobos_rx_convert_samples(struct fobos_dev_t * dev, void * data, size_t size
         scale_re = dev->rx_scale_re;
         scale_im = dev->rx_scale_im;
     }
-        if (dev->rx_buff_counter % 256 == 0)
-        {
-            print_buff(data, 32);
-        }
     float k = 0.0005f;
 
     float dc_re = dev->rx_dc_re;
