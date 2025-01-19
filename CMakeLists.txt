@@ -248,6 +248,28 @@ target_include_directories(fobos_recorder PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 ########################################################################
 
 ########################################################################
+# Create executable fobos_fwloader
+########################################################################
+add_executable(fobos_fwloader
+    eval/fobos_fwloader_main.c)
+
+target_compile_options(fobos_fwloader PUBLIC -std=c99)
+
+target_link_libraries(fobos_fwloader PRIVATE libfobos)
+
+if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
+	target_link_libraries(fobos_fwloader PRIVATE ${LIBUSB_LIBRARIES})
+else()
+	target_link_directories(fobos_fwloader PRIVATE ${LIBUSB_LIBRARIES})
+endif()
+
+target_include_directories(fobos_fwloader PRIVATE ${CMAKE_SOURCE_DIR})
+
+target_include_directories(fobos_fwloader PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
+########################################################################
+
+
+########################################################################
 # Directories
 ########################################################################
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)

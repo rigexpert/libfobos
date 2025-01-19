@@ -1,3 +1,11 @@
+v.2.3.2
+- distinguishing the alternative firmware devices in fobos_rx_get_device_count(), fobos_rx_list_devices() and fobos_rx_open()
+- fobos_rx_close() function with do_reset option to reset the device, no need to replug or press a buttons
+- read/write firmware API fobos_rx_read_firmware(), fobos_rx_write_firmware()
+- fobos_fwloader tool
+- !!! please update the firmware to v.2.1.1
+- !!! HW rev 3.0.0 or higher only
+
 v.2.3.1
 
 - update fow hw rev.3.0.0 (also backwards compatibility)

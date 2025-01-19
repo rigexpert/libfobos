@@ -59,7 +59,7 @@ void get_devinfo()
                     printf("    product:      %s\n", product);
                     printf("    serial:       %s\n", serial);
                 }
-                fobos_rx_close(dev);
+                fobos_rx_close(dev, 0);
             }
             else
             {

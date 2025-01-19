@@ -188,7 +188,7 @@ void test_recorder(void)
             wav_file_destroy(wav);
             wav = 0;
 
-            fobos_rx_close(dev);
+            fobos_rx_close(dev, 0);
         }
         else
         {

@@ -13,6 +13,7 @@
 //  2024.06.21 - update fow hw rev.3.0.0
 //  2024.07.08 - new band plan
 //  2024.07.20 - IQ calibration on the fly
+//  2025.01.16 - v.2.3.2 distinguishing the alternative firmware, fobos_rx_write_firmware()
 //==============================================================================
 #ifndef LIB_FOBOS_H
 #include <stdint.h>
@@ -51,7 +52,7 @@ API_EXPORT int CALL_CONV fobos_rx_list_devices(char * serials);
 // open the specified device
 API_EXPORT int CALL_CONV fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index);
 // close device
-API_EXPORT int CALL_CONV fobos_rx_close(struct fobos_dev_t * dev);
+API_EXPORT int CALL_CONV fobos_rx_close(struct fobos_dev_t * dev, int do_reset);
 // get the board info
 API_EXPORT int CALL_CONV fobos_rx_get_board_info(struct fobos_dev_t * dev, char * hw_revision, char * fw_version, char * manufacturer, char * product, char * serial);
 // set rx frequency, Hz
@@ -84,6 +85,10 @@ API_EXPORT int CALL_CONV fobos_rx_start_sync(struct fobos_dev_t * dev, uint32_t 
 API_EXPORT int CALL_CONV fobos_rx_read_sync(struct fobos_dev_t * dev, float * buf, uint32_t * actual_buf_length);
 // stop synchronous rx mode
 API_EXPORT int CALL_CONV fobos_rx_stop_sync(struct fobos_dev_t * dev);
+// read firmware from the device
+API_EXPORT int CALL_CONV fobos_rx_read_firmware(struct fobos_dev_t* dev, const char * file_name, int verbose);
+// write firmware file to the device
+API_EXPORT int CALL_CONV fobos_rx_write_firmware(struct fobos_dev_t* dev, const char * file_name, int verbose);
 // obtain error text by code
 API_EXPORT const char * CALL_CONV fobos_rx_error_name(int error);
 //==============================================================================
