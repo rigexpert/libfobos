@@ -1717,8 +1717,8 @@ void fobos_rx_convert_samples(struct fobos_dev_t * dev, void * data, size_t size
     int16_t * psample = (int16_t *)data;
     int rx_swap_iq = dev->rx_swap_iq ^ FOBOS_SWAP_IQ_HW;
     float sample = 0.0f;
-    float scale_re = 1.0f / 32786.0f;
-    float scale_im = 1.0f / 32786.0f;
+    float scale_re = 1.0f / 32768.0f;
+    float scale_im = 1.0f / 32768.0f;
     if (dev->rx_direct_sampling)
     {
         rx_swap_iq = FOBOS_SWAP_IQ_HW;
