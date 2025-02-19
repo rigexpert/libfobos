@@ -88,7 +88,7 @@ static const uint32_t CALIBRATION_DC_OFFSET_MAX2830_LNA_GAIN = 1U;
 static const uint32_t CALIBRATION_DC_OFFSET_MAX2830_VGA_GAIN = 0U;
 static const uint32_t CALIBRATION_IQ_CALIBRATION_MAX2830_LNA_GAIN = 1U;
 static const uint32_t CALIBRATION_IQ_CALIBRATION_MAX2830_VGA_GAIN = 0U;
-static const uint64_t CALIBRATION_MAX2830_LO_FREQUENCY = 2350000000U;
+static const uint64_t CALIBRATION_MAX2830_LO_FREQUENCY = 2350000000U; //< divisible by 50 MHz
 static const uint64_t CALIBRATION_RFFC5072_LO_FREQUENCY_OFFSET = 5000000U;
 static const float CALIBRATION_SUCCESS_PHASE_DIFFERENCE_RAD = 0.2F * PI / 180.0;
 static const float CALIBRATION_SUCCESS_GAIN_RATIO = 0.001F;
@@ -408,7 +408,7 @@ void fobos_max2830_write_reg(struct fobos_dev_t *dev, uint8_t addr, uint16_t dat
 //==============================================================================
 int fobos_max2830_init(struct fobos_dev_t *dev)
 {
-    fobos_max2830_write_reg(dev, 0, 0x0740);
+    fobos_max2830_write_reg(dev, 0, 0x0340); //< PLL integer mode
     fobos_max2830_write_reg(dev, 1, 0x119A);
     fobos_max2830_write_reg(dev, 2, 0x1003);
     fobos_max2830_write_reg(dev, 3, 0x0079);
@@ -445,6 +445,8 @@ int fobos_max2830_set_frequency(struct fobos_dev_t *dev, double value, double *a
     double div = value / fcomp;
     uint32_t div_int = (uint32_t)(div) & 0x000000FF;
     uint32_t div_frac = (uint32_t)((div - div_int) * 1048575.0 + 0.5);
+    printf_internal("div_int: %u\n", div_int);
+    printf_internal("div_frac: %u\n", div_frac);
     if (actual)
     {
         div = (double)(div_int) + (double)(div_frac) / 1048575.0;
@@ -559,10 +561,10 @@ int fobos_rffc507x_init(struct fobos_dev_t *dev)
         }
 #ifdef FOBOS_PRINT_DEBUG
         uint16_t data = 0;
-        for (i = 0; i < RFFC507X_REGS_COUNT; i++)
+        for (i = 0; i <= RFFC507X_REGS_COUNT; i++)
         {
             fobos_rffc507x_read_reg(dev, i, &data);
-            printf_internal("0x%04x\n", data);
+            printf_internal("0x%04x: 0x%04x\n", i, data);
         }
 #endif // FOBOS_PRINT_DEBUG
        // ENBL and MODE pins are ignored and become available as GPO5 and GPO6
@@ -639,8 +641,7 @@ int fobos_rffc507x_set_lo_frequency_hz(struct fobos_dev_t *dev, uint64_t lo_freq
     uint16_t p1nmsb;
     uint16_t p1nlsb;
     uint64_t lo_max = 5400000000ULL;
-    uint64_t fref = 25000000ULL;
-    fref = dev->rffc507x_clock;
+    uint64_t fref = dev->rffc507x_clock;
     uint16_t n_lo = 0; // aka p1lodiv
     uint32_t x = lo_max / lo_freq_hz;
     while ((x > 1) && (n_lo < 5))
@@ -675,13 +676,13 @@ int fobos_rffc507x_set_lo_frequency_hz(struct fobos_dev_t *dev, uint64_t lo_freq
     {
         *tune_freq_hz = freq_hz;
     }
-    // Path 1
-    fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0C], 6, 4, n_lo);        // p1lodiv
-    fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0C], 15, 7, n);          // p1n
-    fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0C], 3, 2, fbkdiv >> 1); // p1presc
-    fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0D], 15, 0, p1nmsb);     // p1nmsb
-    fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0E], 15, 8, p1nlsb);     // p1nlsb
-                                                                                             // Path 2
+    // // Path 1
+    // fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0C], 6, 4, n_lo);        // p1lodiv
+    // fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0C], 15, 7, n);          // p1n
+    // fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0C], 3, 2, fbkdiv >> 1); // p1presc
+    // fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0D], 15, 0, p1nmsb);     // p1nmsb
+    // fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0E], 15, 8, p1nlsb);     // p1nlsb
+    // Path 2
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0F], 6, 4, n_lo);        // p2lodiv
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0F], 15, 7, n);          // p1n
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x0F], 3, 2, fbkdiv >> 1); // p1presc
@@ -693,8 +694,8 @@ int fobos_rffc507x_set_lo_frequency_hz(struct fobos_dev_t *dev, uint64_t lo_freq
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x15], 14, 14, 1); // enbl = 1
     fobos_rffc507x_commit(dev, 0);
 #ifdef FOBOS_PRINT_DEBUG
-    double ff = (double)freq_hz;
-    printf_internal("rffc507x lo_freq_mhz = %lld %f\n", lo_freq_hz, ff);
+    printf_internal("tmp_n = %lld\n", tmp_n);
+    printf_internal("rffc507x lo_freq_mhz = %lld %lld\n", lo_freq_hz, freq_hz);
 #endif // FOBOS_PRINT_DEBUG
     return 0;
 }
@@ -797,27 +798,28 @@ int fobos_si5351c_init(struct fobos_dev_t *dev)
 
     uint8_t clk_ctrl_data[9];
     clk_ctrl_data[0] = 16;
-    // #0 rffc507x_clk  prw up, int mode, plla, not inv, msx->clkx, 4ma
-    clk_ctrl_data[1] = si5351c_compose_clk_ctrl(0, 1, 0, 0, 3, 1);
-    clk_ctrl_data[2] = si5351c_compose_clk_ctrl(1, 1, 0, 0, 2, 0); // #1 pwr down
+    clk_ctrl_data[1] = si5351c_compose_clk_ctrl(0, 1, 0, 0, 3, 1); // #0 rffc507x_clk
+    clk_ctrl_data[2] = si5351c_compose_clk_ctrl(1, 1, 0, 0, 3, 0); // #1 pwr down
     clk_ctrl_data[3] = si5351c_compose_clk_ctrl(0, 1, 0, 0, 3, 0); // #2 ADC+
     clk_ctrl_data[4] = si5351c_compose_clk_ctrl(1, 1, 0, 0, 3, 0); // #3 ADC-
     clk_ctrl_data[5] = si5351c_compose_clk_ctrl(0, 1, 0, 0, 3, 1); // #4 MAX2830_CLK
-    clk_ctrl_data[6] = si5351c_compose_clk_ctrl(1, 1, 0, 0, 2, 0); // #5
-    clk_ctrl_data[7] = si5351c_compose_clk_ctrl(1, 1, 0, 0, 2, 0); // #6
-    clk_ctrl_data[8] = si5351c_compose_clk_ctrl(1, 1, 0, 0, 2, 0); // #7
+    clk_ctrl_data[6] = si5351c_compose_clk_ctrl(1, 1, 0, 0, 3, 0); // #5 pwr down
+    clk_ctrl_data[7] = si5351c_compose_clk_ctrl(1, 1, 0, 0, 3, 0); // #6 pwr down
+    clk_ctrl_data[8] = si5351c_compose_clk_ctrl(1, 1, 0, 0, 3, 0); // #7 pwr down
 
     fobos_si5351c_write(dev, clk_ctrl_data, sizeof(clk_ctrl_data));
 
-    fobos_si5351c_config_pll(dev, 0, 80 * 128 - 512, 0, 1);
+    fobos_si5351c_config_pll(dev, 0, 100 * 128 - 512, 0, 1); // 1000 MHz
 
     // Configure rffc507x_clk
-    fobos_si5351c_config_msynth(dev, 0, 20 * 128 - 512, 0, 1, 0); // 40 MHz
-    dev->rffc507x_clock = 40000000ULL;
+    fobos_si5351c_config_msynth(dev, 0, 20 * 128 - 512, 0, 1, 0); // 50 MHz
+    dev->rffc507x_clock = 50000000ULL;
 
     // Configure max2830_clk
-    fobos_si5351c_config_msynth(dev, 4, 20 * 128 - 512, 0, 1, 0); // 40 MHz
-    dev->max2830_clock = 40000000.0;
+    fobos_si5351c_config_msynth(dev, 4, 20 * 128 - 512, 0, 1, 0); // 50 MHz
+    dev->max2830_clock = 50000000.0;
+
+    fobos_si5351c_write_reg(dev, 177, 0xA0); // reset plls
 
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("si5351c registers:\n");
@@ -1088,9 +1090,9 @@ int fobos_rx_get_board_info(struct fobos_dev_t *dev, char *hw_revision, char *fw
 #define FOBOS_IF_FILTER_LOW 1
 #define FOBOS_IF_FILTER_HIGH 2
 #define FOBOS_IF_FREQ_AUTO 0
-#define FOBOS_IF_FREQ_2350 2350
-#define FOBOS_IF_FREQ_2400 2400
-#define FOBOS_IF_FREQ_2450 2450
+#define FOBOS_IF_FREQ_2350 2350 //< divisible by 50 MHz
+#define FOBOS_IF_FREQ_2400 2400 //< divisible by 50 MHz
+#define FOBOS_IF_FREQ_2450 2450 //< divisible by 50 MHz
 #define FOBOS_INJECT_NONE 0
 #define FOBOS_INJECT_LOW 1
 #define FOBOS_INJECT_HIGH 2
@@ -1236,6 +1238,7 @@ const fobos_rx_band_param_t fobos_rx_bands[] = {
 //==============================================================================
 int fobos_rx_set_frequency(struct fobos_dev_t *dev, double value, double *actual)
 {
+    unsigned int i;
     int result = fobos_check(dev);
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(%f);\n", __FUNCTION__, value);
@@ -1360,6 +1363,16 @@ int fobos_rx_set_frequency(struct fobos_dev_t *dev, double value, double *actual
             }
         }
     }
+
+#ifdef FOBOS_PRINT_DEBUG
+    uint16_t data = 0;
+    for (i = 0; i <= RFFC507X_REGS_COUNT; i++)
+    {
+        fobos_rffc507x_read_reg(dev, i, &data);
+        printf_internal("0x%04x: 0x%04x\n", i, data);
+    }
+#endif // FOBOS_PRINT_DEBUG
+
     return result;
 }
 //==============================================================================
@@ -1588,8 +1601,7 @@ int fobos_rx_set_bandwidth(struct fobos_dev_t *dev, double value, double *actual
     return result;
 }
 //==============================================================================
-const double fobos_sample_rates[] = {80000000.0, 50000000.0, 40000000.0, 32000000.0, 25000000.0,
-                                     20000000.0, 16000000.0, 12500000.0, 10000000.0, 8000000.0};
+const double fobos_sample_rates[] = {50000000.0, 40000000.0, 25000000.0, 20000000.0};
 //==============================================================================
 int fobos_rx_get_samplerates(struct fobos_dev_t *dev, double *values, unsigned int *count)
 {
@@ -1610,7 +1622,7 @@ int fobos_rx_get_samplerates(struct fobos_dev_t *dev, double *values, unsigned i
     return result;
 }
 //==============================================================================
-const uint32_t fobos_p1s[] = {10, 16, 20, 25, 32, 40, 50, 64, 80, 100};
+const uint32_t fobos_p1s[] = {20, 25, 40, 50}; //< 1000 MHz VCO
 //==============================================================================
 int fobos_rx_set_samplerate(struct fobos_dev_t *dev, double value, double *actual)
 {
@@ -1639,6 +1651,9 @@ int fobos_rx_set_samplerate(struct fobos_dev_t *dev, double value, double *actua
     p1 = fobos_p1s[i_min] * 128 - 512;
     fobos_si5351c_config_msynth(dev, 2, p1, 0, 1, 0);
     fobos_si5351c_config_msynth(dev, 3, p1, 0, 1, 0);
+
+    fobos_si5351c_write_reg(dev, 177, 0xA0); // reset plls
+
     value = fobos_sample_rates[i_min];
     if (result == 0)
     {
