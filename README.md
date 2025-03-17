@@ -57,7 +57,7 @@ cmake --build . --config Release
 or<br />
 open **fobos.sln** in your favorite **MS VisualStudio IDE**, build, debug, trace, evaluate.<br />
 
-### MacOS
+### MacOS (if cmake fails)
 Make sure you have libusb installed: `brew install libusb`
 ```
 git clone [this repo]
