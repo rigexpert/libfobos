@@ -57,6 +57,17 @@ cmake --build . --config Release
 or<br />
 open **fobos.sln** in your favorite **MS VisualStudio IDE**, build, debug, trace, evaluate.<br />
 
+### MacOS
+Make sure you have libusb installed: `brew install libusb`
+```
+git clone [this repo]
+cd libfobos
+./build-mac.sh
+```
+Verify the device is recognized: `build/mac/fobos_devinfo`
+
+Receive some sample: `build/mac/fobos_recorder`. Then you can open the wav file with inspectrum (`brew install inspectrum`): `inspectrum rx.iq.wav` 
+
 ## How to use Fobos SDR API elsewhere
 
 - build, install, include header **fobos.h**, link library **libfobos.so**, **fobos.dll**  

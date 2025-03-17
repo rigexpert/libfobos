@@ -1792,7 +1792,7 @@ int fobos_alloc_buffers(struct fobos_dev_t *dev)
     }
     if (!dev->transfer)
     {
-        dev->transfer = malloc(dev->transfer_buf_count * sizeof(struct libusb_transfer *));
+        dev->transfer = (struct libusb_transfer **) malloc(dev->transfer_buf_count * sizeof(struct libusb_transfer *));
         if (dev->transfer)
         {
             for (i = 0; i < dev->transfer_buf_count; i++)
@@ -1805,7 +1805,7 @@ int fobos_alloc_buffers(struct fobos_dev_t *dev)
     {
         return FOBOS_ERR_NO_MEM;
     }
-    dev->transfer_buf = malloc(dev->transfer_buf_count * sizeof(unsigned char *));
+    dev->transfer_buf = (unsigned char **) malloc(dev->transfer_buf_count * sizeof(unsigned char *));
     if (dev->transfer_buf)
     {
         memset(dev->transfer_buf, 0, dev->transfer_buf_count * sizeof(unsigned char*));
@@ -2235,7 +2235,7 @@ int fobos_rx_write_firmware(struct fobos_dev_t* dev, const char * file_name, int
     result = 0;
     size_t xx_size = 1024;
     size_t xx_count = (file_size + xx_size - 1)/ xx_size;
-    uint8_t * file_data = malloc(xx_count * xx_size);
+    uint8_t * file_data = (uint8_t *) malloc(xx_count * xx_size);
     fseek(f, 0, SEEK_SET);
     fread(file_data, file_size, 1, f);
     fclose(f);
@@ -2290,7 +2290,7 @@ int fobos_rx_read_firmware(struct fobos_dev_t* dev, const char * file_name, int 
     result = 0;
     size_t xx_size = 1024;
     size_t xx_count = 130;
-    uint8_t * xx_data = malloc(xx_size);
+    uint8_t * xx_data = (uint8_t *) malloc(xx_size);
     uint16_t xsize;
     uint8_t req_code = 0xEC;
     if (verbose)
