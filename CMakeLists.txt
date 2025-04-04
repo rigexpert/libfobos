@@ -86,11 +86,13 @@ endif()
 ########################################################################
 # Install udev rules
 ########################################################################
-install(
-    FILES fobos-sdr.rules
-    DESTINATION "/etc/udev/rules.d"
-    COMPONENT "udev"
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    install(
+        FILES fobos-sdr.rules
+        DESTINATION "/etc/udev/rules.d"
+        COMPONENT "udev"
     )
+endif()
 ########################################################################
 
 ########################################################################
