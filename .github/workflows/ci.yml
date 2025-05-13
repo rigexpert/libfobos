@@ -1,0 +1,94 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: ${{ matrix.toolchain.name }}
+    runs-on: ${{ matrix.toolchain.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+        - name: Linux Clang
+          os: ubuntu-24.04
+          cmake_args: -DCMAKE_C_COMPILER=clang
+
+        - name: Linux GCC
+          os: ubuntu-24.04
+
+        - name: macOS ARM
+          os: macos-14
+
+        - name: macOS Intel
+          os: macos-13
+
+        - name: MinGW
+          os: windows-2022
+          cmake_args: -G "MinGW Makefiles"
+
+        - name: MSVC 32-bit
+          os: windows-2022
+          cmake_args: -A Win32
+
+        - name: MSVC 64-bit
+          os: windows-2022
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Linux Dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update && sudo apt-get install libusb-1.0-0-dev
+
+    - name: Install Windows Dependencies
+      if: runner.os == 'Windows'
+      run: |
+        LIBUSB_VERSION=1.0.28
+        LIBUSB_PACKAGE=libusb-$LIBUSB_VERSION.7z
+        aria2c -q https://github.com/libusb/libusb/releases/download/v$LIBUSB_VERSION/$LIBUSB_PACKAGE
+        7z x $LIBUSB_PACKAGE -olibusb
+
+    - name: Install MinGW
+      if: startsWith(matrix.toolchain.name, 'MinGW')
+      uses: msys2/setup-msys2@v2
+
+    - name: Configure
+      run: |
+        cmake -B build ${{ matrix.toolchain.cmake_args }} .
+
+    - name: Get Number of CPU Cores
+      uses: SimenB/github-actions-cpu-cores@v2
+      id: cpu-cores
+
+    - name: Build
+      run: |
+        export MAKEFLAGS=--keep-going
+        cmake --build build --config Release --parallel ${{ steps.cpu-cores.outputs.count }}
+
+    - name: Install Linux/macOS
+      if: runner.os != 'Windows'
+      run: |
+        sudo cmake --install build
+
+    - name: Test POSIX
+      if: ${{ !startsWith(matrix.toolchain.name, 'MSVC') }}
+      run: |
+        build/fobos_devinfo
+
+    - name: Test MSVC
+      if: startsWith(matrix.toolchain.name, 'MSVC')
+      run: |
+        build/Release/fobos_devinfo.exe
+
+    - name: List Build Directory
+      if: always()
+      run: |
+        git status
+        ls -lR build
