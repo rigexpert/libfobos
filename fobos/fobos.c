@@ -1204,7 +1204,7 @@ int fobos_rx_set_frequency(struct fobos_dev_t * dev, double value, double * actu
         size_t count = sizeof(fobos_rx_bands) / sizeof(fobos_rx_bands[0]);
         uint32_t freq_mhz = (uint32_t)(value / 1E6 + 0.5);
         size_t idx = count;
-        for (int i = 0; i < count; i++)
+        for (size_t i = 0; i < count; i++)
         {
             if ((freq_mhz >= fobos_rx_bands[i].freq_mhz_min) && (freq_mhz <= fobos_rx_bands[i].freq_mhz_max))
             {
