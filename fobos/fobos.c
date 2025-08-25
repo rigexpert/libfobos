@@ -15,6 +15,7 @@
 //  2024.07.20 - IQ calibration on the fly
 //  2025.01.16 - v.2.3.2 distinguishing the alternative firmware, fobos_rx_write_firmware()
 //  2025.01.19 - v.2.3.2 fobos_rx_reset()
+//  2025.08.23 - v.2.4.0 DC filter improved, VGA gain fixed
 //==============================================================================
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
@@ -38,37 +39,37 @@
 //==============================================================================
 //#define FOBOS_PRINT_DEBUG
 //==============================================================================
-#define LIB_VERSION "2.3.2"
+#define LIB_VERSION "2.4.0"
 #define DRV_VERSION "libusb"
 //==============================================================================
-#define FOBOS_VENDOR_ID    0x16d0
-#define FOBOS_PRODUCT_ID   0x132e
-#define FOBOS_DEV_ID       0x0000
+#define FOBOS_VENDOR_ID             0x16d0
+#define FOBOS_PRODUCT_ID            0x132e
+#define FOBOS_DEV_ID                0x0000
 //==============================================================================
-#define FOBOS_DEV_PRESEL_V1 0
-#define FOBOS_DEV_PRESEL_V2 1
-#define FOBOS_DEV_LNA_LP_SHD 2
-#define FOBOS_DEV_LNA_HP_SHD 3
-#define FOBOS_DEV_IF_V1  4
-#define FOBOS_DEV_IF_V2  5
-#define FOBOS_DEV_OQMUX  6
-#define FOBOS_DEV_LPF_A0 6
-#define FOBOS_DEV_LPF_A1 7
-#define FOBOS_DEV_NENBL_HF 8
-#define FOBOS_DEV_CLKSEL 9
-#define FOBOS_DEV_ADC_NCS 10
-#define FOBOS_DEV_ADC_SCK 11
-#define FOBOS_DEV_ADC_SDI 12
-#define FOBOS_MAX2830_ANTSEL 13
+#define FOBOS_DEV_PRESEL_V1         0
+#define FOBOS_DEV_PRESEL_V2         1
+#define FOBOS_DEV_LNA_LP_SHD        2
+#define FOBOS_DEV_LNA_HP_SHD        3
+#define FOBOS_DEV_IF_V1             4
+#define FOBOS_DEV_IF_V2             5
+#define FOBOS_DEV_OQMUX             6
+#define FOBOS_DEV_LPF_A0            6
+#define FOBOS_DEV_LPF_A1            7
+#define FOBOS_DEV_NENBL_HF          8
+#define FOBOS_DEV_CLKSEL            9
+#define FOBOS_DEV_ADC_NCS           10
+#define FOBOS_DEV_ADC_SCK           11
+#define FOBOS_DEV_ADC_SDI           12
+#define FOBOS_MAX2830_ANTSEL        13
 //==============================================================================
 #define bitset(x,nbit)   ((x) |=  (1<<(nbit)))
 #define bitclear(x,nbit) ((x) &= ~(1<<(nbit)))
-#define FOBOS_DEF_BUF_COUNT 16
-#define FOBOS_MAX_BUF_COUNT 64
-#define FOBOS_DEF_BUF_LENGTH    (16 * 32 * 512)
-#define LIBUSB_BULK_TIMEOUT 0
-#define LIBUSB_BULK_IN_ENDPOINT 0x81
-#define LIBUSB_DDESCRIPTOR_LEN 64
+#define FOBOS_DEF_BUF_COUNT         16
+#define FOBOS_MAX_BUF_COUNT         64
+#define FOBOS_DEF_BUF_LENGTH        (16 * 32 * 512)
+#define LIBUSB_BULK_TIMEOUT         0
+#define LIBUSB_BULK_IN_ENDPOINT     0x81
+#define LIBUSB_DDESCRIPTOR_LEN      64
 #ifndef LIBUSB_CALL
 #define LIBUSB_CALL
 #endif
@@ -150,14 +151,14 @@ char * to_bin(uint16_t s16, char * str)
 //==============================================================================
 void print_buff(void *buff, int size)
 {
-    int16_t * b16 = (int16_t *)buff;
+    uint16_t * b16 = (uint16_t *)buff;
     int count = size / 4;
     char bin_re[17];
     char bin_im[17];
     for (int i = 0; i < count; i++)
     {
-        int16_t re16 = b16[i * 2 + 0] & 0xFFFF;
-        int16_t im16 = b16[i * 2 + 1] & 0xFFFF;
+        uint16_t re16 = b16[i * 2 + 0] & 0xFFFF;
+        uint16_t im16 = b16[i * 2 + 1] & 0xFFFF;
         to_bin(re16, bin_re);
         to_bin(im16, bin_im);
         printf_internal("%s % 6d  %s % 6d \r\n", bin_re, re16, bin_im, im16);
@@ -290,54 +291,6 @@ int fobos_check(struct fobos_dev_t * dev)
 #define CTRLI       (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_IN)
 #define CTRLO       (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_OUT)
 #define CTRL_TIMEOUT    300
-void fobos_spi(struct fobos_dev_t * dev, uint8_t* tx, uint8_t* rx, uint16_t size)
-{
-    int result = fobos_check(dev);
-    uint16_t xsize = 0;
-    if (result == 0)
-    {
-        xsize += libusb_control_transfer(dev->libusb_devh, CTRLO, 0xE2, 1, 0, tx, size, CTRL_TIMEOUT);
-        xsize += libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE2, 1, 0, rx, size, CTRL_TIMEOUT);
-        if (xsize != size * 2)
-        {
-            result = FOBOS_ERR_CONTROL;
-        }
-    }
-    if (result != 0)
-    {
-        printf_internal("fobos_spi() err %d\n", result);
-    }
-}
-//==============================================================================
-void fobos_i2c_transfer(struct fobos_dev_t * dev, uint8_t address, uint8_t* tx_data, uint16_t tx_size, uint8_t* rx_data, uint16_t rx_size)
-{
-    uint8_t req_code = 0xE7;
-    int result = fobos_check(dev);
-    uint16_t xsize;
-    if (result == 0)
-    {
-        if ((tx_data != 0) && tx_size > 0)
-        {
-            xsize = libusb_control_transfer(dev->libusb_devh, CTRLO, req_code, address, 0, tx_data, tx_size, CTRL_TIMEOUT);
-            if (xsize != tx_size)
-            {
-                result = FOBOS_ERR_CONTROL;
-            }
-        }
-        if ((rx_data != 0) && rx_size > 0)
-        {
-            xsize = libusb_control_transfer(dev->libusb_devh, CTRLI, req_code, address, 0, rx_data, rx_size, CTRL_TIMEOUT);
-            if (xsize != tx_size)
-            {
-                result = FOBOS_ERR_CONTROL;
-            }
-        }
-    }
-    if (result != 0)
-    {
-        printf_internal("fobos_i2c_transfer() err %d\n", result);
-    }
-}
 //==============================================================================
 void fobos_i2c_write(struct fobos_dev_t * dev, uint8_t address, uint8_t* data, uint16_t size)
 {
@@ -408,15 +361,15 @@ void fobos_max2830_write_reg(struct fobos_dev_t * dev, uint8_t addr, uint16_t da
 //==============================================================================
 int fobos_max2830_init(struct fobos_dev_t * dev)
 {
-    fobos_max2830_write_reg(dev, 0, 0x1740);
+    fobos_max2830_write_reg(dev, 0, 0x0740);
     fobos_max2830_write_reg(dev, 1, 0x119A);
     fobos_max2830_write_reg(dev, 2, 0x1003);
     fobos_max2830_write_reg(dev, 3, 0x0079);
     fobos_max2830_write_reg(dev, 4, 0x3666);
-    fobos_max2830_write_reg(dev, 5, 0x00A0); // Reference Frequency Divider = 1
+    fobos_max2830_write_reg(dev, 5, 0x00A0); // D2 = 0 -> Reference Frequency Divider = 1
     fobos_max2830_write_reg(dev, 6, 0x0060);
-    fobos_max2830_write_reg(dev, 7, 0x0022);
-    fobos_max2830_write_reg(dev, 8, 0x3420);
+    fobos_max2830_write_reg(dev, 7, 0x1022);
+    fobos_max2830_write_reg(dev, 8, 0x3020);
     fobos_max2830_write_reg(dev, 9, 0x03B5);
     fobos_max2830_write_reg(dev, 10, 0x1DA4);
     fobos_max2830_write_reg(dev, 11, 0x0000);
@@ -890,8 +843,8 @@ int fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index)
                 dev->dev_gpo = 0;
                 dev->rx_scale_re = 1.0f / 32768.0f;
                 dev->rx_scale_im = 1.0f / 32768.0f;
-                dev->rx_dc_re = 0.25f;
-                dev->rx_dc_im = 0.25f;
+                dev->rx_dc_re = 8192.0f;
+                dev->rx_dc_im = 8192.0f;
                 dev->rx_avg_re = 0.0f;
                 dev->rx_avg_im = 0.0f;
                 if (fobos_check(dev) == 0)
@@ -1543,13 +1496,14 @@ int fobos_rx_set_bandwidth(struct fobos_dev_t * dev, double value, double * actu
     if (dev->rx_bw_idx != idx)
     {
         dev->rx_bw_idx = idx;
-        fobos_max2830_write_reg(dev, 8, idx | 0x3420);
+        fobos_max2830_write_reg(dev, 8, idx | 0x3020); 
     }
     if (dev->rx_bw_adj != adj)
     {
         dev->rx_bw_adj = adj;
-        fobos_max2830_write_reg(dev, 7, adj | 0x0020);
+        fobos_max2830_write_reg(dev, 7, adj | 0x1020);
     }
+    //printf("idx = %d, adj = %d\n", idx, adj);
     return result;
 }
 //==============================================================================
@@ -1729,8 +1683,11 @@ void fobos_rx_convert_samples(struct fobos_dev_t * dev, void * data, size_t size
         scale_re = dev->rx_scale_re;
         scale_im = dev->rx_scale_im;
     }
+    //if (dev->rx_buff_counter % 256 == 0)
+    //{
+    //    print_buff(data, 32);
+    //}
     float k = 0.0005f;
-
     float dc_re = dev->rx_dc_re;
     float dc_im = dev->rx_dc_im;
     float * dst_re = dst_samples;
@@ -1744,35 +1701,33 @@ void fobos_rx_convert_samples(struct fobos_dev_t * dev, void * data, size_t size
     for (size_t i = 0; i < chunks_count; i++)
     {
         // 0
-        sample = (psample[0] & 0x3FFF) * scale_re;
+        sample = (float)(psample[0] & 0x3FFF);
         dc_re += k * (sample - dc_re);
-        sample -= dc_re;
-        dst_re[0] = sample;
-        sample = (psample[1] & 0x3FFF) * scale_im;
+        dst_re[0] = (sample - dc_re) * scale_re;
+        sample = (float)(psample[1] & 0x3FFF);
         dc_im += k * (sample - dc_im);
-        sample -= dc_im;
-        dst_im[0] = sample;
+        dst_im[0] = (sample - dc_im) * scale_re;
         // 1
-        dst_re[2] = (psample[2] & 0x3FFF) * scale_re - dc_re;
-        dst_im[2] = (psample[3] & 0x3FFF) * scale_im - dc_im;
+        dst_re[2] = ((float)(psample[2] & 0x3FFF) - dc_re) * scale_re;
+        dst_im[2] = ((float)(psample[3] & 0x3FFF) - dc_im) * scale_im;
         // 2
-        dst_re[4] = (psample[4] & 0x3FFF) * scale_re - dc_re;
-        dst_im[4] = (psample[5] & 0x3FFF) * scale_im - dc_im;
+        dst_re[4] = ((float)(psample[4] & 0x3FFF) - dc_re) * scale_re;
+        dst_im[4] = ((float)(psample[5] & 0x3FFF) - dc_im) * scale_im;
         // 3
-        dst_re[6] = (psample[6] & 0x3FFF) * scale_re - dc_re;
-        dst_im[6] = (psample[7] & 0x3FFF) * scale_im - dc_im;
+        dst_re[6] = ((float)(psample[6] & 0x3FFF) - dc_re) * scale_re;
+        dst_im[6] = ((float)(psample[7] & 0x3FFF) - dc_im) * scale_im;
         // 4
-        dst_re[8] = (psample[8] & 0x3FFF) * scale_re - dc_re;
-        dst_im[8] = (psample[9] & 0x3FFF) * scale_im - dc_im;
+        dst_re[8] = ((float)(psample[8] & 0x3FFF) - dc_re) * scale_re;
+        dst_im[8] = ((float)(psample[9] & 0x3FFF) - dc_im) * scale_im;
         // 5
-        dst_re[10] = (psample[10] & 0x3FFF) * scale_re - dc_re;
-        dst_im[10] = (psample[11] & 0x3FFF) * scale_im - dc_im;
+        dst_re[10] = ((float)(psample[10] & 0x3FFF) - dc_re) * scale_re;
+        dst_im[10] = ((float)(psample[11] & 0x3FFF) - dc_im) * scale_im;
         // 6
-        dst_re[12] = (psample[12] & 0x3FFF) * scale_re - dc_re;
-        dst_im[12] = (psample[13] & 0x3FFF) * scale_im - dc_im;
+        dst_re[12] = ((float)(psample[12] & 0x3FFF) - dc_re) * scale_re;
+        dst_im[12] = ((float)(psample[13] & 0x3FFF) - dc_im) * scale_im;
         // 7
-        dst_re[14] = (psample[14] & 0x3FFF) * scale_re - dc_re;
-        dst_im[14] = (psample[15] & 0x3FFF) * scale_im - dc_im;
+        dst_re[14] = ((float)(psample[14] & 0x3FFF) - dc_re) * scale_re;
+        dst_im[14] = ((float)(psample[15] & 0x3FFF) - dc_im) * scale_im;
         //
         dst_re += 16;
         dst_im += 16;
@@ -1784,7 +1739,6 @@ void fobos_rx_convert_samples(struct fobos_dev_t * dev, void * data, size_t size
 //==============================================================================
 int fobos_alloc_buffers(struct fobos_dev_t *dev)
 {
-    unsigned int i;
     int result = fobos_check(dev);
     if (result != FOBOS_ERR_OK)
     {
@@ -1792,10 +1746,10 @@ int fobos_alloc_buffers(struct fobos_dev_t *dev)
     }
     if (!dev->transfer)
     {
-        dev->transfer = (struct libusb_transfer **) malloc(dev->transfer_buf_count * sizeof(struct libusb_transfer *));
+        dev->transfer = (struct libusb_transfer **)malloc(dev->transfer_buf_count * sizeof(struct libusb_transfer *));
         if (dev->transfer)
         {
-            for (i = 0; i < dev->transfer_buf_count; i++)
+            for (size_t i = 0; i < dev->transfer_buf_count; i++)
             {
                 dev->transfer[i] = libusb_alloc_transfer(0);
             }
@@ -1805,7 +1759,7 @@ int fobos_alloc_buffers(struct fobos_dev_t *dev)
     {
         return FOBOS_ERR_NO_MEM;
     }
-    dev->transfer_buf = (unsigned char **) malloc(dev->transfer_buf_count * sizeof(unsigned char *));
+    dev->transfer_buf = (unsigned char **)malloc(dev->transfer_buf_count * sizeof(unsigned char *));
     if (dev->transfer_buf)
     {
         memset(dev->transfer_buf, 0, dev->transfer_buf_count * sizeof(unsigned char*));
@@ -1813,7 +1767,7 @@ int fobos_alloc_buffers(struct fobos_dev_t *dev)
 #if defined(ENABLE_ZEROCOPY) && defined (__linux__) && LIBUSB_API_VERSION >= 0x01000105
     printf_internal("Allocating %d zero-copy buffers\n", dev->transfer_buf_count);
     dev->use_zerocopy = 1;
-    for (i = 0; i < dev->transfer_buf_count; ++i)
+    for (size_t i = 0; i < dev->transfer_buf_count; ++i)
     {
         dev->transfer_buf[i] = libusb_dev_mem_alloc(dev->libusb_devh, dev->transfer_buf_size);
         if (dev->transfer_buf[i])
@@ -1836,7 +1790,7 @@ int fobos_alloc_buffers(struct fobos_dev_t *dev)
     }
     if (!dev->use_zerocopy)
     {
-        for (i = 0; i < dev->transfer_buf_count; ++i)
+        for (size_t i = 0; i < dev->transfer_buf_count; ++i)
         {
             if (dev->transfer_buf[i])
             {
@@ -1847,7 +1801,7 @@ int fobos_alloc_buffers(struct fobos_dev_t *dev)
 #endif
     if (!dev->use_zerocopy)
     {
-        for (i = 0; i < dev->transfer_buf_count; ++i)
+        for (size_t i = 0; i < dev->transfer_buf_count; ++i)
         {
             dev->transfer_buf[i] = (unsigned char *)malloc(dev->transfer_buf_size);
 
@@ -1862,7 +1816,6 @@ int fobos_alloc_buffers(struct fobos_dev_t *dev)
 //==============================================================================
 int fobos_free_buffers(struct fobos_dev_t *dev)
 {
-    unsigned int i;
     int result = fobos_check(dev);
     if (result != 0)
     {
@@ -1870,7 +1823,7 @@ int fobos_free_buffers(struct fobos_dev_t *dev)
     }
     if (dev->transfer)
     {
-        for (i = 0; i < dev->transfer_buf_count; ++i)
+        for (size_t i = 0; i < dev->transfer_buf_count; ++i)
         {
             if (dev->transfer[i])
             {
@@ -1882,7 +1835,7 @@ int fobos_free_buffers(struct fobos_dev_t *dev)
     }
     if (dev->transfer_buf)
     {
-        for (i = 0; i < dev->transfer_buf_count; ++i)
+        for (size_t i = 0; i < dev->transfer_buf_count; ++i)
         {
             if (dev->transfer_buf[i])
             {
@@ -1950,7 +1903,6 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
 //==============================================================================
 int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, uint32_t buf_count, uint32_t buf_length)
 {
-    unsigned int i;
     int result = fobos_check(dev);
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(0x%08x, 0x%08x, 0x%08x, %d, %d)\n", __FUNCTION__, (unsigned int)dev, (unsigned int)cb, (unsigned int)ctx, buf_count, buf_length);
@@ -2008,7 +1960,7 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
     bitclear(dev->dev_gpo, FOBOS_DEV_ADC_SDI);
     fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
 
-    for (i = 0; i < dev->transfer_buf_count; ++i)
+    for (size_t i = 0; i < dev->transfer_buf_count; ++i)
     {
         libusb_fill_bulk_transfer(dev->transfer[i],
             dev->libusb_devh,
@@ -2053,7 +2005,7 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
             {
                 break;
             }
-            for (i = 0; i < dev->transfer_buf_count; ++i)
+            for (size_t i = 0; i < dev->transfer_buf_count; ++i)
             {
                 //printf_internal(" ~%d", i);
                 if (!dev->transfer[i])
@@ -2235,7 +2187,7 @@ int fobos_rx_write_firmware(struct fobos_dev_t* dev, const char * file_name, int
     result = 0;
     size_t xx_size = 1024;
     size_t xx_count = (file_size + xx_size - 1)/ xx_size;
-    uint8_t * file_data = (uint8_t *) malloc(xx_count * xx_size);
+    uint8_t * file_data = (uint8_t * )malloc(xx_count * xx_size);
     fseek(f, 0, SEEK_SET);
     fread(file_data, file_size, 1, f);
     fclose(f);
@@ -2290,7 +2242,7 @@ int fobos_rx_read_firmware(struct fobos_dev_t* dev, const char * file_name, int 
     result = 0;
     size_t xx_size = 1024;
     size_t xx_count = 130;
-    uint8_t * xx_data = (uint8_t *) malloc(xx_size);
+    uint8_t * xx_data = (uint8_t * )malloc(xx_size);
     uint16_t xsize;
     uint8_t req_code = 0xEC;
     if (verbose)

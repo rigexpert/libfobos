@@ -15,6 +15,7 @@
 //  2024.07.20 - IQ calibration on the fly
 //  2025.01.16 - v.2.3.2 distinguishing the alternative firmware, fobos_rx_write_firmware()
 //  2025.01.19 - v.2.3.2 fobos_rx_reset()
+//  2025.08.23 - v.2.4.0 DC filter improved, VGA gain fixed
 //==============================================================================
 #ifndef LIB_FOBOS_H
 #include <stdint.h>
@@ -95,6 +96,7 @@ API_EXPORT int CALL_CONV fobos_rx_write_firmware(struct fobos_dev_t* dev, const 
 // obtain error text by code
 API_EXPORT const char * CALL_CONV fobos_rx_error_name(int error);
 //==============================================================================
+
 #ifdef __cplusplus
 }
 #endif

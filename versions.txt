@@ -1,3 +1,7 @@
+v.2.4.0 
+- DC filter improved
+- VGA gain fixed, whole range #0..31 is available
+
 v.2.3.2
 - distinguishing the alternative firmware devices in fobos_rx_get_device_count(), fobos_rx_list_devices() and fobos_rx_open()
 - fobos_rx_reset() function to reset the device, no need to replug or press a buttons
