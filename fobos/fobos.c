@@ -694,8 +694,8 @@ int fobos_rffc507x_set_lo_frequency_hz(struct fobos_dev_t *dev, uint64_t lo_freq
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x15], 14, 14, 1); // enbl = 1
     fobos_rffc507x_commit(dev, 0);
 #ifdef FOBOS_PRINT_DEBUG
-    printf_internal("tmp_n = %lld\n", tmp_n);
-    printf_internal("rffc507x lo_freq_mhz = %lld %lld\n", lo_freq_hz, freq_hz);
+    printf_internal("tmp_n = %ld\n", tmp_n);
+    printf_internal("rffc507x lo_freq_mhz = %ld %ld\n", lo_freq_hz, freq_hz);
 #endif // FOBOS_PRINT_DEBUG
     return 0;
 }
@@ -2473,7 +2473,7 @@ int fobos_rx_read_async(struct fobos_dev_t *dev, fobos_rx_cb_t cb, void *ctx, ui
         result = libusb_submit_transfer(dev->transfer[i]);
         if (result < 0)
         {
-            printf_internal("Failed to submit transfer #%i, err %i\n", i, result);
+            printf_internal("Failed to submit transfer #%li, err %i\n", i, result);
             dev->rx_async_status = FOBOS_CANCELING;
             break;
         }
@@ -2518,7 +2518,7 @@ int fobos_rx_read_async(struct fobos_dev_t *dev, fobos_rx_cb_t cb, void *ctx, ui
                     libusb_handle_events_timeout_completed(dev->libusb_ctx, &tvx, NULL);
                     if (result < 0)
                     {
-                        printf_internal("libusb_cancel_transfer[%d] returned: %d %s\n", i, result,
+                        printf_internal("libusb_cancel_transfer[%ld] returned: %d %s\n", i, result,
                                         libusb_error_name(result));
                         continue;
                     }
@@ -2680,7 +2680,7 @@ int fobos_rx_write_firmware(struct fobos_dev_t *dev, const char *file_name, int 
     {
         return result;
     }
-    if (dev->rx_sync_started || dev->rx_async_status != FOBOS_IDDLE)
+    if (dev->rx_sync_started || dev->rx_async_status != FOBOS_IDLE)
     {
         return FOBOS_ERR_UNSUPPORTED;
     }
@@ -2742,7 +2742,7 @@ int fobos_rx_read_firmware(struct fobos_dev_t *dev, const char *file_name, int v
     {
         return result;
     }
-    if (dev->rx_sync_started || dev->rx_async_status != FOBOS_IDDLE)
+    if (dev->rx_sync_started || dev->rx_async_status != FOBOS_IDLE)
     {
         return FOBOS_ERR_UNSUPPORTED;
     }
