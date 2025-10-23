@@ -1,3 +1,6 @@
+v.2.4.1(beta)
+- new software DC filter
+
 v.2.4.0 
 - DC filter improved
 - VGA gain fixed, whole range #0..31 is available

@@ -16,6 +16,7 @@
 //  2025.01.16 - v.2.3.2 distinguishing the alternative firmware, fobos_rx_write_firmware()
 //  2025.01.19 - v.2.3.2 fobos_rx_reset()
 //  2025.08.23 - v.2.4.0 DC filter improved, VGA gain fixed
+//  2025.10.23 - v.2.4.1 new software DC filter
 //==============================================================================
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
@@ -39,7 +40,7 @@
 //==============================================================================
 //#define FOBOS_PRINT_DEBUG
 //==============================================================================
-#define LIB_VERSION "2.4.0"
+#define LIB_VERSION "2.4.1"
 #define DRV_VERSION "libusb"
 //==============================================================================
 #define FOBOS_VENDOR_ID             0x16d0
@@ -1669,9 +1670,12 @@ void fobos_rx_calibrate(struct fobos_dev_t * dev, void * data, size_t size)
 void fobos_rx_convert_samples(struct fobos_dev_t * dev, void * data, size_t size, float * dst_samples)
 {
     size_t complex_samples_count = size / 4;
-    int16_t * psample = (int16_t *)data;
+    size_t chunks_count = complex_samples_count / 4;
+    int16_t * src = (int16_t *)data;
+    float * dst = dst_samples;
     int rx_swap_iq = dev->rx_swap_iq ^ FOBOS_SWAP_IQ_HW;
-    float sample = 0.0f;
+    float re = 0.0f;
+    float im = 0.0f;
     float scale_re = 1.0f / 32768.0f;
     float scale_im = 1.0f / 32768.0f;
     if (dev->rx_direct_sampling)
@@ -1684,55 +1688,88 @@ void fobos_rx_convert_samples(struct fobos_dev_t * dev, void * data, size_t size
         scale_re = dev->rx_scale_re;
         scale_im = dev->rx_scale_im;
     }
-    //if (dev->rx_buff_counter % 256 == 0)
-    //{
-    //    print_buff(data, 32);
-    //}
-    float k = 0.0005f;
+#ifdef FOBOS_PRINT_DEBUG
+    if (dev->rx_buff_counter % 256 == 0)
+    {
+        print_buff(data, 64);
+    }
+#endif // FOBOS_PRINT_DEBUG
+    float k = 0.0004f; // ~ play around
     float dc_re = dev->rx_dc_re;
     float dc_im = dev->rx_dc_im;
-    float * dst_re = dst_samples;
-    float * dst_im = dst_samples + 1;
     if (rx_swap_iq)
     {
-        dst_re = dst_samples + 1;
-        dst_im = dst_samples;
+        for (size_t i = 0; i < chunks_count; i++)
+        {
+            // 0
+            re = (float)(src[1] & 0x3FFF);
+            im = (float)(src[0] & 0x3FFF);
+            dc_re += k * (re - dc_re);
+            dc_im += k * (im - dc_im);
+            dst[0] = (re - dc_re) * scale_re;
+            dst[1] = (im - dc_im) * scale_im;
+            // 1
+            re = (float)(src[3] & 0x3FFF);
+            im = (float)(src[2] & 0x3FFF);
+            dc_re += k * (re - dc_re);
+            dc_im += k * (im - dc_im);
+            dst[2] = (re - dc_re) * scale_re;
+            dst[3] = (im - dc_im) * scale_im;
+            // 2
+            re = (float)(src[5] & 0x3FFF);
+            im = (float)(src[4] & 0x3FFF);
+            dc_re += k * (re - dc_re);
+            dc_im += k * (im - dc_im);
+            dst[4] = (re - dc_re) * scale_re;
+            dst[5] = (im - dc_im) * scale_im;
+            // 3
+            re = (float)(src[7] & 0x3FFF);
+            im = (float)(src[6] & 0x3FFF);
+            dc_re += k * (re - dc_re);
+            dc_im += k * (im - dc_im);
+            dst[6] = (re - dc_re) * scale_re;
+            dst[7] = (im - dc_im) * scale_im;
+            //
+            src += 8;
+            dst += 8;
+        }
     }
-    size_t chunks_count = complex_samples_count / 8;
-    for (size_t i = 0; i < chunks_count; i++)
+    else
     {
-        // 0
-        sample = (float)(psample[0] & 0x3FFF);
-        dc_re += k * (sample - dc_re);
-        dst_re[0] = (sample - dc_re) * scale_re;
-        sample = (float)(psample[1] & 0x3FFF);
-        dc_im += k * (sample - dc_im);
-        dst_im[0] = (sample - dc_im) * scale_re;
-        // 1
-        dst_re[2] = ((float)(psample[2] & 0x3FFF) - dc_re) * scale_re;
-        dst_im[2] = ((float)(psample[3] & 0x3FFF) - dc_im) * scale_im;
-        // 2
-        dst_re[4] = ((float)(psample[4] & 0x3FFF) - dc_re) * scale_re;
-        dst_im[4] = ((float)(psample[5] & 0x3FFF) - dc_im) * scale_im;
-        // 3
-        dst_re[6] = ((float)(psample[6] & 0x3FFF) - dc_re) * scale_re;
-        dst_im[6] = ((float)(psample[7] & 0x3FFF) - dc_im) * scale_im;
-        // 4
-        dst_re[8] = ((float)(psample[8] & 0x3FFF) - dc_re) * scale_re;
-        dst_im[8] = ((float)(psample[9] & 0x3FFF) - dc_im) * scale_im;
-        // 5
-        dst_re[10] = ((float)(psample[10] & 0x3FFF) - dc_re) * scale_re;
-        dst_im[10] = ((float)(psample[11] & 0x3FFF) - dc_im) * scale_im;
-        // 6
-        dst_re[12] = ((float)(psample[12] & 0x3FFF) - dc_re) * scale_re;
-        dst_im[12] = ((float)(psample[13] & 0x3FFF) - dc_im) * scale_im;
-        // 7
-        dst_re[14] = ((float)(psample[14] & 0x3FFF) - dc_re) * scale_re;
-        dst_im[14] = ((float)(psample[15] & 0x3FFF) - dc_im) * scale_im;
-        //
-        dst_re += 16;
-        dst_im += 16;
-        psample += 16;
+        for (size_t i = 0; i < chunks_count; i++)
+        {
+            // 0
+            re = (float)(src[0] & 0x3FFF);
+            im = (float)(src[1] & 0x3FFF);
+            dc_re += k * (re - dc_re);
+            dc_im += k * (im - dc_im);
+            dst[0] = (re - dc_re) * scale_re;
+            dst[1] = (im - dc_im) * scale_im;
+            // 1
+            re = (float)(src[2] & 0x3FFF);
+            im = (float)(src[3] & 0x3FFF);
+            dc_re += k * (re - dc_re);
+            dc_im += k * (im - dc_im);
+            dst[2] = (re - dc_re) * scale_re;
+            dst[3] = (im - dc_im) * scale_im;
+            // 2
+            re = (float)(src[4] & 0x3FFF);
+            im = (float)(src[5] & 0x3FFF);
+            dc_re += k * (re - dc_re);
+            dc_im += k * (im - dc_im);
+            dst[4] = (re - dc_re) * scale_re;
+            dst[5] = (im - dc_im) * scale_im;
+            // 3
+            re = (float)(src[6] & 0x3FFF);
+            im = (float)(src[7] & 0x3FFF);
+            dc_re += k * (re - dc_re);
+            dc_im += k * (im - dc_im);
+            dst[6] = (re - dc_re) * scale_re;
+            dst[7] = (im - dc_im) * scale_im;
+            //
+            src += 8;
+            dst += 8;
+        }
     }
     dev->rx_dc_re = dc_re;
     dev->rx_dc_im = dc_im;
