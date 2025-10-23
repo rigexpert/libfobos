@@ -862,6 +862,7 @@ int fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index)
                     fobos_rffc507x_init(dev);
                     fobos_rx_set_frequency(dev, 100E6, 0);
                     fobos_rx_set_samplerate(dev, 25000000.0, 0);
+                    libusb_free_device_list(dev_list, 1);
                     return FOBOS_ERR_OK;
                 }
             }
