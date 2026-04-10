@@ -1,3 +1,4 @@
+// vim: ts=4 sw=4 sts=4 et
 //==============================================================================
 //       _____     __           _______
 //      /  __  \  /_/          /  ____/                                __
@@ -235,6 +236,13 @@ int fobos_rx_list_devices(char * serials)
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s();\n", __FUNCTION__);
 #endif // FOBOS_PRINT_DEBUG
+
+    if (!serials)
+    {
+        return 0;
+    }
+
+    serials[0] = 0;
     memset(string, 0, sizeof(string));
     result = libusb_init(&ctx);
     if (result < 0)

@@ -63,7 +63,7 @@ void get_devinfo()
             }
             else
             {
-                printf("    could not open device\n");
+                printf("    could not open device: %s\n",fobos_rx_error_name(result));
             }
         }
     }
