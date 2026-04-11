@@ -32,16 +32,19 @@ extern "C"
 #define API_EXPORT
 #endif // _WIN32
 //==============================================================================
-#define FOBOS_ERR_OK 0
-#define FOBOS_ERR_NO_DEV -1
-#define FOBOS_ERR_NOT_OPEN -2
-#define FOBOS_ERR_NO_MEM -3
-#define FOBOS_ERR_CONTROL -4
-#define FOBOS_ERR_ASYNC_IN_SYNC -5
-#define FOBOS_ERR_SYNC_IN_ASYNC -6
-#define FOBOS_ERR_SYNC_NOT_STARTED -7
-#define FOBOS_ERR_UNSUPPORTED -8
-#define FOBOS_ERR_LIBUSB -9
+#define FOBOS_ERR_OK                 0
+#define FOBOS_ERR_NO_DEV            -1
+#define FOBOS_ERR_NOT_OPEN          -2
+#define FOBOS_ERR_NO_MEM            -3
+#define FOBOS_ERR_CONTROL           -4
+#define FOBOS_ERR_ASYNC_IN_SYNC     -5
+#define FOBOS_ERR_SYNC_IN_ASYNC     -6
+#define FOBOS_ERR_SYNC_NOT_STARTED  -7
+#define FOBOS_ERR_UNSUPPORTED       -8
+#define FOBOS_ERR_LIBUSB            -9
+#define FOBOS_ERR_BAD_PARAM         -10
+#define FOBOS_MIN_FREQS_CNT 2
+#define FOBOS_MAX_FREQS_CNT 256
 //==============================================================================
 struct fobos_dev_t;
 typedef void(*fobos_rx_cb_t)(float *buf, uint32_t buf_length, void *ctx);

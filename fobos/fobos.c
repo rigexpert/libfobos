@@ -41,12 +41,15 @@
 //==============================================================================
 //#define FOBOS_PRINT_DEBUG
 //==============================================================================
-#define LIB_VERSION "2.4.1"
+#define LIB_VERSION "4.0.0"
 #define DRV_VERSION "libusb"
 //==============================================================================
 #define FOBOS_VENDOR_ID             0x16d0
 #define FOBOS_PRODUCT_ID            0x132e
 #define FOBOS_DEV_ID                0x0000
+#define FOBOS_SDR_VENDOR_ID         0x16d0
+#define FOBOS_SDR_PRODUCT_ID        0x132e
+#define FOBOS_SDR_DEV_ID            0x0101
 //==============================================================================
 #define FOBOS_DEV_PRESEL_V1         0
 #define FOBOS_DEV_PRESEL_V2         1
@@ -84,6 +87,38 @@ enum fobos_async_status
     FOBOS_CANCELING
 };
 //==============================================================================
+struct fobos_dev_t;
+//==============================================================================
+typedef struct{
+    const char *name;
+    uint16_t idVendor;
+    uint16_t idProduct;
+    uint16_t bcdDevice;
+    int (*open)(struct fobos_dev_t *dev);
+    int (*close)(struct fobos_dev_t *dev);
+    int (*start)(struct fobos_dev_t *dev,int packs_per_transfer);
+    int (*stop)(struct fobos_dev_t *dev);
+    int (*set_freq)(struct fobos_dev_t *dev, double value, double * actual);
+    int (*get_srates)(struct fobos_dev_t *dev, double * values, unsigned int * count);
+    int (*set_srate)(struct fobos_dev_t *dev, double value, double * actual);
+    int (*set_bw)(struct fobos_dev_t *dev, double value, double * actual);
+    int (*set_autobw)(struct fobos_dev_t *dev, uint64_t val);
+    int (*set_direct_sampling)(struct fobos_dev_t *dev, unsigned int enabled);
+    int (*set_clk_source)(struct fobos_dev_t *dev, int value);
+    int (*set_lna_gain)(struct fobos_dev_t *dev, unsigned int value);
+    int (*set_vga_gain)(struct fobos_dev_t *dev, unsigned int value);
+    int (*set_user_gpo)(struct fobos_dev_t *dev, uint8_t value);
+    int (*set_dev_gpo)(struct fobos_dev_t *dev, uint16_t value);
+    int (*set_lpf)(struct fobos_dev_t *dev, double bandwidth);
+    int (*start_scan)(struct fobos_dev_t *dev, uint64_t *frequencies, unsigned int count);
+    int (*stop_scan)(struct fobos_dev_t *dev);
+    int (*write_firmware)(struct fobos_dev_t* dev, const char * file_name, int verbose);
+    int (*read_firmware)(struct fobos_dev_t* dev, const char * file_name, int verbose);
+    int (*read_user)(struct fobos_dev_t * dev, void * data, int size);
+    int (*write_user)(struct fobos_dev_t * dev, void * data, int size);
+}fobos_cmds_t;
+
+//==============================================================================
 struct fobos_dev_t
 {
     //=== libusb ===============================================================
@@ -97,6 +132,7 @@ struct fobos_dev_t
     int dev_lost;
     int use_zerocopy;
     //=== common ===============================================================
+    const fobos_cmds_t *cmds;
     uint16_t user_gpo;
     uint16_t dev_gpo;
     char hw_revision[32];
@@ -138,20 +174,141 @@ struct fobos_dev_t
     unsigned char * rx_sync_buf;
     int do_reset;
 };
+
+
+static int fobosv2_open(struct fobos_dev_t *dev);
+static int fobosv2_close(struct fobos_dev_t *dev);
+static int fobosv2_start(struct fobos_dev_t *dev,int packs_per_transfer);
+static int fobosv2_stop(struct fobos_dev_t *dev);
+static int fobosv2_set_freq(struct fobos_dev_t *dev, double value, double * actual);
+static int fobosv2_get_srates(struct fobos_dev_t *dev, double * values, unsigned int * count);
+static int fobosv2_set_srate(struct fobos_dev_t *dev, double value, double * actual);
+static int fobosv2_set_bw(struct fobos_dev_t *dev, double value, double * actual);
+static int fobosv2_set_autobw(struct fobos_dev_t *dev, uint64_t val);
+static int fobosv2_set_direct_sampling(struct fobos_dev_t *dev, unsigned int enabled);
+static int fobosv2_set_clk_source(struct fobos_dev_t *dev, int value);
+static int fobosv2_set_lna_gain(struct fobos_dev_t *dev, unsigned int value);
+static int fobosv2_set_vga_gain(struct fobos_dev_t *dev, unsigned int value);
+static int fobosv2_set_user_gpo(struct fobos_dev_t *dev, uint8_t value);
+static int fobosv2_set_dev_gpo(struct fobos_dev_t *dev, uint16_t value);
+static int fobosv2_set_lpf(struct fobos_dev_t *dev, double bandwidth);
+static int fobosv2_start_scan(struct fobos_dev_t *dev, uint64_t *frequencies, unsigned int count);
+static int fobosv2_stop_scan(struct fobos_dev_t *dev);
+static int fobosv2_write_firmware(struct fobos_dev_t* dev, const char * file_name, int verbose);
+static int fobosv2_read_firmware(struct fobos_dev_t* dev, const char * file_name, int verbose);
+static int fobosv2_read_user(struct fobos_dev_t * dev, void * data, int size);
+static int fobosv2_write_user(struct fobos_dev_t * dev, void * data, int size);
+
+
+#if 0
+static int _open(struct fobos_dev_t *dev);
+static int _close(struct fobos_dev_t *dev);
+static int _start(struct fobos_dev_t *dev,int packs_per_transfer);
+static int _stop(struct fobos_dev_t *dev);
+static int _set_freq(struct fobos_dev_t *dev, double value, double * actual);
+static int _get_srates(struct fobos_dev_t *dev, double * values, unsigned int * count);
+static int _set_srate(struct fobos_dev_t *dev, double value, double * actual);
+static int _set_bw(struct fobos_dev_t *dev, double value, double * actual);
+static int _set_autobw(struct fobos_dev_t *dev, uint64_t val);
+static int _set_direct_sampling(struct fobos_dev_t *dev, unsigned int enabled);
+static int _set_clk_source(struct fobos_dev_t *dev, int value);
+static int _set_lna_gain(struct fobos_dev_t *dev, unsigned int value);
+static int _set_vga_gain(struct fobos_dev_t *dev, unsigned int value);
+static int _set_user_gpo(struct fobos_dev_t *dev, uint8_t value);
+static int _set_dev_gpo(struct fobos_dev_t *dev, uint16_t value);
+static int _set_lpf(struct fobos_dev_t *dev, double bandwidth);
+static int _start_scan(struct fobos_dev_t *dev, uint64_t *frequencies, unsigned int count);
+static int _stop_scan(struct fobos_dev_t *dev);
+static int _write_firmware(struct fobos_dev_t* dev, const char * file_name, int verbose);
+static int _read_firmware(struct fobos_dev_t* dev, const char * file_name, int verbose);
+static int _read_user(struct fobos_dev_t * dev, void * data, int size);
+static int _write_user(struct fobos_dev_t * dev, void * data, int size);
+
+#endif
+
+
+static const fobos_cmds_t fobosv2_cmds =
+{
+    .name = "fobossdr",
+    .idVendor = FOBOS_VENDOR_ID,
+    .idProduct = FOBOS_PRODUCT_ID,
+    .bcdDevice = FOBOS_DEV_ID,
+    .open = fobosv2_open,
+    .close = fobosv2_close,
+    .start = fobosv2_start,
+    .stop = fobosv2_stop,
+    .set_freq = fobosv2_set_freq,
+    .get_srates = fobosv2_get_srates,
+    .set_srate = fobosv2_set_srate,
+    .set_bw = fobosv2_set_bw,
+    .set_autobw = fobosv2_set_autobw,
+    .set_direct_sampling = fobosv2_set_direct_sampling,
+    .set_clk_source = fobosv2_set_clk_source,
+    .set_lna_gain = fobosv2_set_lna_gain,
+    .set_vga_gain = fobosv2_set_vga_gain,
+    .set_user_gpo = fobosv2_set_user_gpo,
+    .set_dev_gpo = fobosv2_set_dev_gpo,
+    .set_lpf = fobosv2_set_lpf,
+    .start_scan = fobosv2_start_scan,
+    .stop_scan = fobosv2_stop_scan,
+    .write_firmware = fobosv2_write_firmware,
+    .read_firmware = fobosv2_read_firmware,
+    .write_user = fobosv2_write_user,
+    .read_user = fobosv2_read_user,
+};
+
+static const fobos_cmds_t *devices_cmds[] =
+{
+    &fobosv2_cmds,
+#if 0
+    {
+        .name = "fobossdr",
+        .idVendor = _VENDOR_ID,
+        .idProduct = _PRODUCT_ID
+        .bcdDevice = _DEV_ID,
+        .open = _open,
+        .close = _close,
+        .start = _start,
+        .stop = _stop,
+        .set_freq = _freq,
+        .get_srate = fobosv2_get_srates,
+        .set_srate = _set_srate,
+        .set_bw = _set_bw,
+        .set_autobw = _set_autobw,
+        .set_direct_sampling = _set_direct_sampling,
+        .set_clk_source = _set_clk_source,
+        .set_lna_gain = _set_lna_gain,
+        .set_vga_gain = _set_vga_gain,
+        .set_user_gpo = _set_user_gpo,
+        .set_dev_gpo = _set_dev_gpo,
+        .set_lpf = _set_lpf,
+        .start_scan = _start_scan,
+        .stop_scan = _stop_scan,
+        .write_firmware = _write_firmware,
+        .read_firmware = _read_firmware,
+        .write_user = _write_user,
+        .read_user = _read_user,
+    },
+#endif
+};
+
+
+int fobos_check(struct fobos_dev_t * dev);
+
 //==============================================================================
-char * to_bin(uint16_t s16, char * str)
+static char * to_bin(uint16_t s16, char * str)
 {
     for (uint16_t i = 0; i < 16; i++)
     {
-        *str = ((s16 & 0x8000) >> 15) + '0';
+        *str = (char)((s16 & 0x8000) >> 15) + '0';
         str++;
-        s16 <<= 1;
+        s16 = (uint16_t)(s16 << 1);
     }
     *str = 0;
     return str;
 }
 //==============================================================================
-void print_buff(void *buff, int size)
+static void print_buff(void *buff, int size)
 {
     uint16_t * b16 = (uint16_t *)buff;
     int count = size / 4;
@@ -166,136 +323,10 @@ void print_buff(void *buff, int size)
         printf_internal("%s % 6d  %s % 6d \r\n", bin_re, re16, bin_im, im16);
     }
 }
-//==============================================================================
-void fobos_rffc507x_register_modify(uint16_t * p_data, uint8_t bit_to, uint8_t bit_from, uint16_t value)
-{
-    uint16_t mask = (~(~0u << (bit_to - bit_from + 1))) << (bit_from);
-    *p_data = (* p_data & (~mask)) | ((value << bit_from) & mask);
-}
-//==============================================================================
-int fobos_rx_get_api_info(char * lib_version, char * drv_version)
-{
-    if (lib_version)
-    {
-        strcpy(lib_version, LIB_VERSION" "__DATE__" "__TIME__);
-    }
-    if (drv_version)
-    {
-        strcpy(drv_version, DRV_VERSION);
-    }
-    return 0;
-}
-//==============================================================================
-int fobos_rx_get_device_count(void)
-{
-    int i;
-    int result;
-    libusb_context *ctx;
-    libusb_device **list;
-    uint32_t device_count = 0;
-    struct libusb_device_descriptor dd;
-    ssize_t cnt;
-#ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s();\n", __FUNCTION__);
-#endif // FOBOS_PRINT_DEBUG
-    result = libusb_init(&ctx);
-    if (result < 0)
-    {
-        return 0;
-    }
-    cnt = libusb_get_device_list(ctx, &list);
-    for (i = 0; i < cnt; i++)
-    {
-        libusb_get_device_descriptor(list[i], &dd);
-#ifdef FOBOS_PRINT_DEBUG
-        printf_internal("%04x:%04x\n", dd.idVendor, dd.idProduct);
-#endif // FOBOS_PRINT_DEBUG        
-        if ((dd.idVendor == FOBOS_VENDOR_ID) &&
-            (dd.idProduct == FOBOS_PRODUCT_ID) &&
-            (dd.bcdDevice == FOBOS_DEV_ID))
-        {
-            device_count++;
-        }
-    }
-    libusb_free_device_list(list, 1);
-    libusb_exit(ctx);
-    return device_count;
-}
-//==============================================================================
-int fobos_rx_list_devices(char * serials)
-{
-    int i;
-    int result;
-    libusb_context *ctx;
-    libusb_device **list;
-    uint32_t device_count = 0;
-    struct libusb_device_descriptor dd;
-    ssize_t cnt;
-    libusb_device_handle *handle;
-    char string[256];
-#ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s();\n", __FUNCTION__);
-#endif // FOBOS_PRINT_DEBUG
 
-    if (!serials)
-    {
-        return 0;
-    }
-
-    serials[0] = 0;
-    memset(string, 0, sizeof(string));
-    result = libusb_init(&ctx);
-    if (result < 0)
-    {
-        return 0;
-    }
-    cnt = libusb_get_device_list(ctx, &list);
-    for (i = 0; i < cnt; i++)
-    {
-        libusb_get_device_descriptor(list[i], &dd);
-        if ((dd.idVendor == FOBOS_VENDOR_ID) &&
-            (dd.idProduct == FOBOS_PRODUCT_ID) &&
-            (dd.bcdDevice == FOBOS_DEV_ID))
-        {
-            if (serials)
-            {
-                handle = 0;
-                result = libusb_open(list[i], &handle);
-                if ((result == 0) && (handle))
-                {
-                    result = libusb_get_string_descriptor_ascii(handle, dd.iSerialNumber, (unsigned char*)string, sizeof(string));
-                    if (result > 0)
-                    {
-                        serials = strcat(serials, string);
-                    }
-                    libusb_close(handle);
-                }
-                else
-                {
-                    serials = strcat(serials, "XXXXXXXXXXXX");
-                }
-                serials = strcat(serials, " ");
-            }
-            device_count++;
-        }
-    }
-    libusb_free_device_list(list, 1);
-    libusb_exit(ctx);
-    return device_count;
-}
 //==============================================================================
-int fobos_check(struct fobos_dev_t * dev)
-{
-    if (dev != NULL)
-    {
-        if ((dev->libusb_ctx != NULL) && (dev->libusb_devh != NULL))
-        {
-            return FOBOS_ERR_OK;
-        }
-        return FOBOS_ERR_NOT_OPEN;
-    }
-    return FOBOS_ERR_NO_DEV;
-}
+// old fobos sdr specific
+//==============================================================================
 //==============================================================================
 #define CTRLI       (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_IN)
 #define CTRLO       (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_OUT)
@@ -321,6 +352,12 @@ void fobos_i2c_write(struct fobos_dev_t * dev, uint8_t address, uint8_t* data, u
     {
         printf_internal("fobos_i2c_write() err %d\n", result);
     }
+}
+//==============================================================================
+void fobos_rffc507x_register_modify(uint16_t * p_data, uint8_t bit_to, uint8_t bit_from, uint16_t value)
+{
+    uint16_t mask = (~(~0u << (bit_to - bit_from + 1))) << (bit_from);
+    *p_data = (* p_data & (~mask)) | ((value << bit_from) & mask);
 }
 //==============================================================================
 void fobos_i2c_read(struct fobos_dev_t * dev, uint8_t address, uint8_t* data, uint16_t size)
@@ -611,7 +648,7 @@ int fobos_rffc507x_set_lo_frequency_hz(struct fobos_dev_t * dev, uint64_t lo_fre
     fobos_rffc507x_commit(dev, 0);
 #ifdef FOBOS_PRINT_DEBUG
     double ff = (double)freq_hz;
-    printf_internal("rffc507x lo_freq_mhz = %lld %f\n", lo_freq_hz, ff);
+    printf_internal("rffc507x lo_freq_mhz = %ld %f\n", lo_freq_hz, ff);
 #endif // FOBOS_PRINT_DEBUG
     return 0;
 }
@@ -765,237 +802,71 @@ int fobos_fx3_command(struct fobos_dev_t * dev, uint8_t code, uint16_t value, ui
     return result;
 }
 //==============================================================================
-int fobos_rx_set_user_gpo(struct fobos_dev_t * dev, uint8_t value)
+static int fobosv2_open(struct fobos_dev_t *dev)
 {
-#ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s(0x%04x);\n", __FUNCTION__, value);
-#endif // FOBOS_PRINT_DEBUG
-    return fobos_fx3_command(dev, 0xE3, value, 0);
+    int result;
+    // start fx
+    dev->rx_frequency_band = 0xFFFFFFFF;
+    dev->dev_gpo = 0;
+    dev->rx_scale_re = 1.0f / 32768.0f;
+    dev->rx_scale_im = 1.0f / 32768.0f;
+    dev->rx_dc_re = 8192.0f;
+    dev->rx_dc_im = 8192.0f;
+    dev->rx_avg_re = 0.0f;
+    dev->rx_avg_im = 0.0f;
+    result = fobos_check(dev);
+    if (result == FOBOS_ERR_OK)
+    {
+        bitset(dev->dev_gpo, FOBOS_DEV_CLKSEL);
+        bitset(dev->dev_gpo, FOBOS_DEV_LNA_LP_SHD);
+        bitset(dev->dev_gpo, FOBOS_DEV_LNA_HP_SHD);
+        bitset(dev->dev_gpo, FOBOS_DEV_ADC_NCS);
+        bitset(dev->dev_gpo, FOBOS_DEV_ADC_SCK);
+        bitset(dev->dev_gpo, FOBOS_DEV_ADC_SDI);
+        bitset(dev->dev_gpo, FOBOS_DEV_NENBL_HF);
+        dev->cmds->set_dev_gpo(dev, dev->dev_gpo);
+        fobos_si5351c_init(dev);
+        fobos_max2830_init(dev);
+        fobos_rffc507x_init(dev);
+        fobos_rx_set_frequency(dev, 100E6, 0);
+        fobos_rx_set_samplerate(dev, 25000000.0, 0);
+        return FOBOS_ERR_OK;
+    }
+    return result;
 }
 //==============================================================================
-int fobos_rx_set_dev_gpo(struct fobos_dev_t * dev, uint16_t value)
+static int fobosv2_close(struct fobos_dev_t *dev)
 {
-#ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s(0x%04x);\n", __FUNCTION__, value);
-#endif // FOBOS_PRINT_DEBUG
-    return fobos_fx3_command(dev, 0xE4, value, 0);
-}
-//==============================================================================
-int fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index)
-{
-    int result = 0;
-    int i = 0;
-    struct fobos_dev_t * dev = NULL;
-    libusb_device **dev_list;
-    libusb_device *device = NULL;
-    ssize_t cnt;
-    uint32_t device_count = 0;
-    struct libusb_device_descriptor dd;
-    dev = (struct fobos_dev_t*)malloc(sizeof(struct fobos_dev_t));
-    if (NULL == dev)
-    {
-        return FOBOS_ERR_NO_MEM;
-    }
-    memset(dev, 0, sizeof(struct fobos_dev_t));
-    result = libusb_init(&dev->libusb_ctx);
-    if (result < 0)
-    {
-        free(dev);
-        return result;
-    }
-    cnt = libusb_get_device_list(dev->libusb_ctx, &dev_list);
-    for (i = 0; i < cnt; i++)
-    {
-        libusb_get_device_descriptor(dev_list[i], &dd);
-        if ((dd.idVendor == FOBOS_VENDOR_ID) &&
-            (dd.idProduct == FOBOS_PRODUCT_ID) &&
-            (dd.bcdDevice == FOBOS_DEV_ID))
-        {
-            if (index == device_count)
-            {
-                device = dev_list[i];
-                break;
-            }
-            device_count++;
-        }
-    }
-    if (device)
-    {
-        result = libusb_open(device, &dev->libusb_devh);
-        if (result == 0)
-        {
-            libusb_get_string_descriptor_ascii(dev->libusb_devh, dd.iSerialNumber, (unsigned char*)dev->serial, sizeof(dev->serial));
-            libusb_get_string_descriptor_ascii(dev->libusb_devh, dd.iManufacturer, (unsigned char*)dev->manufacturer, sizeof(dev->manufacturer));
-            libusb_get_string_descriptor_ascii(dev->libusb_devh, dd.iProduct, (unsigned char*)dev->product, sizeof(dev->product));
-            result = libusb_claim_interface(dev->libusb_devh, 0);
-            if (result == 0)
-            {
-                *out_dev = dev;
-                //======================================================================
-                result  = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 0, 0, (unsigned char*)dev->hw_revision, sizeof(dev->hw_revision), CTRL_TIMEOUT);
-                if (result <= 0)
-                {
-                    strcpy(dev->hw_revision, "2.0.0");
-                }
-                result = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 1, 0, (unsigned char*)dev->fw_version, sizeof(dev->fw_version), CTRL_TIMEOUT);
-                if (result <= 0)
-                {
-                    strcpy(dev->hw_revision, "2.0.0");
-                }
-                result = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 2, 0, (unsigned char*)dev->fw_build, sizeof(dev->fw_build), CTRL_TIMEOUT);
-                if (result <= 0)
-                {
-                    strcpy(dev->fw_build, "unknown");
-                }
-                //======================================================================
-                dev->rx_frequency_band = 0xFFFFFFFF;
-                dev->dev_gpo = 0;
-                dev->rx_scale_re = 1.0f / 32768.0f;
-                dev->rx_scale_im = 1.0f / 32768.0f;
-                dev->rx_dc_re = 8192.0f;
-                dev->rx_dc_im = 8192.0f;
-                dev->rx_avg_re = 0.0f;
-                dev->rx_avg_im = 0.0f;
-                if (fobos_check(dev) == 0)
-                {
-                    bitset(dev->dev_gpo, FOBOS_DEV_CLKSEL);
-                    bitset(dev->dev_gpo, FOBOS_DEV_LNA_LP_SHD);
-                    bitset(dev->dev_gpo, FOBOS_DEV_LNA_HP_SHD);
-                    bitset(dev->dev_gpo, FOBOS_DEV_ADC_NCS);
-                    bitset(dev->dev_gpo, FOBOS_DEV_ADC_SCK);
-                    bitset(dev->dev_gpo, FOBOS_DEV_ADC_SDI);
-                    bitset(dev->dev_gpo, FOBOS_DEV_NENBL_HF);
-                    fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
-                    fobos_si5351c_init(dev);
-                    fobos_max2830_init(dev);
-                    fobos_rffc507x_init(dev);
-                    fobos_rx_set_frequency(dev, 100E6, 0);
-                    fobos_rx_set_samplerate(dev, 25000000.0, 0);
-                    libusb_free_device_list(dev_list, 1);
-                    return FOBOS_ERR_OK;
-                }
-            }
-            else
-            {
-                printf_internal("usb_claim_interface error %d\n", result);
-            }
-        }
-        else
-        {
-            printf_internal("usb_open error %d\n", result);
-#ifndef _WIN32
-            if (result == LIBUSB_ERROR_ACCESS)
-            {
-                printf_internal("Please fix the device permissions by installing fobos-sdr.rules\n");
-            }
-#endif
-        }
-    }
-    libusb_free_device_list(dev_list, 1);
-    if (dev->libusb_devh)
-    {
-        libusb_close(dev->libusb_devh);
-    }
-    if (dev->libusb_ctx)
-    {
-        libusb_exit(dev->libusb_ctx);
-    }
-    free(dev);
-    return FOBOS_ERR_NO_DEV;
-}
-//==============================================================================
-int fobos_rx_close(struct fobos_dev_t * dev)
-{
-    int result = fobos_check(dev);
-#ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s();\n", __FUNCTION__);
-#endif // FOBOS_PRINT_DEBUG
-    if (result != FOBOS_ERR_OK)
-    {
-        return result;
-    }
-    fobos_rx_cancel_async(dev);
-    fobos_rx_stop_sync(dev);
-    while (FOBOS_IDDLE != dev->rx_async_status)
-    {
-#ifdef FOBOS_PRINT_DEBUG
-        printf_internal("s");
-#endif
-#ifdef _WIN32
-        Sleep(1);
-#else
-        sleep(1);
-#endif
-    }
     fobos_fx3_command(dev, 0xE1, 0, 0);       // stop fx
     bitset(dev->dev_gpo, FOBOS_DEV_ADC_SDI);
     bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A0);
     bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A1);
     bitset(dev->dev_gpo, FOBOS_DEV_NENBL_HF);
-    fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
+    dev->cmds->set_dev_gpo(dev, dev->dev_gpo);
     // disable rffc507x
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x15], 14, 14, 0); // enbl = 0
     fobos_rffc507x_commit(dev, 0);
     // disable clocks
     fobos_rffc507x_clock(dev, 0);
     fobos_max2830_clock(dev, 0);
-    if (dev->do_reset)
-    {
-        libusb_control_transfer(dev->libusb_devh, CTRLO, 0xE0, 0, 0, 0, 0, CTRL_TIMEOUT);
-    }
-    libusb_close(dev->libusb_devh);
-    libusb_exit(dev->libusb_ctx);
-    free(dev);
-    return result;
+    return FOBOS_ERR_OK;
 }
 //==============================================================================
-int fobos_rx_reset(struct fobos_dev_t * dev)
+static int fobosv2_start(struct fobos_dev_t *dev,int packs_per_transfer)
 {
-    int result = fobos_check(dev);
-#ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s();\n", __FUNCTION__);
-#endif // FOBOS_PRINT_DEBUG
-    if (result != FOBOS_ERR_OK)
-    {
-        return result;
-    }
-    dev->do_reset = 1;
-    return fobos_rx_close(dev);
+    fobos_fx3_command(dev, 0xE1, 1, 0);        // start fx
+
+    bitclear(dev->dev_gpo, FOBOS_DEV_ADC_SDI);
+    dev->cmds->set_dev_gpo(dev, dev->dev_gpo);
+    return FOBOS_ERR_OK;
 }
 //==============================================================================
-int fobos_rx_get_board_info(struct fobos_dev_t * dev, char * hw_revision, char * fw_version, char * manufacturer, char * product, char * serial)
+static int fobosv2_stop(struct fobos_dev_t *dev)
 {
-#ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s();\n", __FUNCTION__);
-#endif // FOBOS_PRINT_DEBUG
-    int result = fobos_check(dev);
-    if (result != FOBOS_ERR_OK)
-    {
-        return result;
-    }
-    if (hw_revision)
-    {
-        strcpy(hw_revision, dev->hw_revision);
-    }
-    if (fw_version)
-    {
-        strcpy(fw_version, dev->fw_version);
-        strcat(fw_version, " ");
-        strcat(fw_version, dev->fw_build);
-    }
-    if (manufacturer)
-    {
-        strcpy(manufacturer, dev->manufacturer);
-    }
-    if (product)
-    {
-        strcpy(product, dev->product);
-    }
-    if (serial)
-    {
-        strcpy(serial, dev->serial);
-    }
-    return result;
+    fobos_fx3_command(dev, 0xE1, 0, 0);       // stop fx
+    bitset(dev->dev_gpo, FOBOS_DEV_ADC_SDI);
+    dev->cmds->set_dev_gpo(dev, dev->dev_gpo);
+    return FOBOS_ERR_OK;
 }
 //==============================================================================
 #define FOBOS_PRESELECT_BYPASS   0
@@ -1152,16 +1023,12 @@ const fobos_rx_band_param_t fobos_rx_bands[] =
     },
 };
 //==============================================================================
-int fobos_rx_set_frequency(struct fobos_dev_t * dev, double value, double * actual)
+static int fobosv2_set_freq(struct fobos_dev_t *dev, double value, double * actual)
 {
-    int result = fobos_check(dev);
+    int result = FOBOS_ERR_OK;
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(%f);\n", __FUNCTION__, value);
 #endif // FOBOS_PRINT_DEBUG    
-    if (result != FOBOS_ERR_OK)
-    {
-        return result;
-    }
     if (dev->rx_frequency != value)
     {
         size_t count = sizeof(fobos_rx_bands) / sizeof(fobos_rx_bands[0]);
@@ -1232,7 +1099,7 @@ int fobos_rx_set_frequency(struct fobos_dev_t * dev, double value, double * actu
                     break;
                 }
             }
-            fobos_rx_set_dev_gpo(dev, dev->dev_gpo);   // commit dev_gpo value
+            dev->cmds->set_dev_gpo(dev, dev->dev_gpo);   // commit dev_gpo value
             fobos_rffc507x_clock(dev, fobos_rx_bands[idx].rffc507x_enabled);
             fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x15], 14, 14, fobos_rx_bands[idx].rffc507x_enabled);
             fobos_rffc507x_commit(dev, 0);
@@ -1288,167 +1155,76 @@ int fobos_rx_set_frequency(struct fobos_dev_t * dev, double value, double * actu
     return result;
 }
 //==============================================================================
-int fobos_rx_set_direct_sampling(struct fobos_dev_t * dev, unsigned int enabled)
+const double fobos_sample_rates[] =
 {
-#ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s(%d);\n", __FUNCTION__, enabled);
-#endif // FOBOS_PRINT_DEBUG
-    int result = fobos_check(dev);
-    if (result != FOBOS_ERR_OK)
-    {
-        return result;
-    }
-    if (dev->rx_direct_sampling != enabled)
-    {
-        if (enabled)
-        {
-            if (dev->hw_revision[0] == '2')
-            {
-                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-            }
-            else
-            {
-                bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-                bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-            }
-            bitclear(dev->dev_gpo, FOBOS_DEV_NENBL_HF);
-            fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
-            // disable clocks
-            fobos_rffc507x_clock(dev, 0);
-            fobos_max2830_clock(dev, 0);
-            // disable rffc507x
-            fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x15], 14, 14, 0); // enbl = 0
-            fobos_rffc507x_commit(dev, 0);
-        }
-        else
-        {
-            bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-            bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-            if (dev->rx_lpf_idx > 2)
-            {
-                dev->rx_lpf_idx = 2;
-            }
-            if (dev->hw_revision[0] == '2')
-            {
-                if (dev->rx_lpf_idx & 1)
-                {
-                    bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-                }
-                if (dev->rx_lpf_idx & 2)
-                {
-                    bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-                }
-            }
-            else
-            {
-                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-            }
-            bitset(dev->dev_gpo, FOBOS_DEV_NENBL_HF);
-            fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
-            // enable clocks
-            fobos_rffc507x_clock(dev, 1);
-            fobos_max2830_clock(dev, 1);
-            // enable rffc507x
-            fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x15], 14, 14, 1); // enbl = 1
-            fobos_rffc507x_commit(dev, 0);
-        }
-        dev->rx_direct_sampling = enabled;
-    }
-    return result;
-}
+    80000000.0,
+    50000000.0,
+    40000000.0,
+    32000000.0,
+    25000000.0,
+    20000000.0,
+    16000000.0,
+    12500000.0,
+    10000000.0,
+    8000000.0
+};
 //==============================================================================
-int fobos_rx_set_lna_gain(struct fobos_dev_t * dev, unsigned int value)
+static int fobosv2_get_srates(struct fobos_dev_t *dev, double * values, unsigned int * count)
 {
-#ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s(%d)\n", __FUNCTION__, value);
-#endif // FOBOS_PRINT_DEBUG
-    int result = fobos_check(dev);
-    if (result != FOBOS_ERR_OK)
-    {
-        return result;
-    }
-    if (value > 3) value = 3;
-    if (value != dev->rx_lna_gain)
-    {
-        dev->rx_lna_gain = value;
-        int lna_gain = dev->rx_lna_gain & 0x0003;
-        int vga_gain = dev->rx_vga_gain & 0x001F;
-        fobos_max2830_write_reg(dev, 11, (lna_gain << 5) | vga_gain);
-    }
-    return result;
-}
-//==============================================================================
-int fobos_rx_set_vga_gain(struct fobos_dev_t * dev, unsigned int value)
-{
-#ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s(%d)\n", __FUNCTION__, value);
-#endif // FOBOS_PRINT_DEBUG
-    int result = fobos_check(dev);
-    if (result != FOBOS_ERR_OK)
-    {
-        return result;
-    }
+    int result;
+
     result = 0;
-    if (value > 31) value = 31;
-    if (value != dev->rx_vga_gain)
+    if (count)
     {
-        dev->rx_vga_gain = value;
-        int lna_gain = dev->rx_lna_gain & 0x0003;
-        int vga_gain = dev->rx_vga_gain & 0x001F;
-        fobos_max2830_write_reg(dev, 11, (lna_gain << 5) | vga_gain);
+        *count = sizeof(fobos_sample_rates) / sizeof(fobos_sample_rates[0]);
+        if (values)
+        {
+            memcpy(values, fobos_sample_rates, sizeof(fobos_sample_rates));
+        }
     }
     return result;
 }
 //==============================================================================
-int fobos_rx_set_lpf(struct fobos_dev_t * dev, double bandwidth)
+const uint32_t fobos_p1s[] =
 {
-    int result = fobos_check(dev);
+    10, 
+    16, 20, 25, 32, 40, 50, 64, 80, 100
+};
+//==============================================================================
+static int fobosv2_set_srate(struct fobos_dev_t *dev, double value, double * actual)
+{
+    int result = FOBOS_ERR_OK;
 #ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s(%f)\n", __FUNCTION__, bandwidth);
+    printf_internal("%s(%f)\n", __FUNCTION__, value);
 #endif // FOBOS_PRINT_DEBUG
-    if (result != FOBOS_ERR_OK)
+    uint32_t p1 = 0;
+    size_t count = sizeof(fobos_sample_rates) / sizeof(fobos_sample_rates[0]);
+    double df_min = fobos_sample_rates[0];
+    size_t i_min = 0;
+    for (size_t i = 0; i < count; i++)
     {
-        return result;
+        double df = fabs(value - fobos_sample_rates[i]);
+        if (df < df_min)
+        {
+            df_min = df;
+            i_min = i;
+        }
     }
-    result = 0;
-    int rx_lpf_idx = dev->rx_lpf_idx;
-    if (!dev->rx_direct_sampling)
+    p1 = fobos_p1s[i_min] * 128 - 512;
+    fobos_si5351c_config_msynth(dev, 2, p1, 0, 1, 0);
+    fobos_si5351c_config_msynth(dev, 3, p1, 0, 1, 0);
+    value = fobos_sample_rates[i_min];
+    if (result == 0)
     {
-        bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-        bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-        if (dev->hw_revision[0] == '2')
+        double bandwidth = value * 0.8;
+        dev->cmds->set_lpf(dev, bandwidth);
+        dev->cmds->set_bw(dev, bandwidth, 0);
+        dev->rx_samplerate = value;
+        if (actual)
         {
-            if (bandwidth < 13000000.0)
-            {
-                rx_lpf_idx = 0;
-            }
-            else if (bandwidth < 26000000.0)
-            {
-                rx_lpf_idx = 1;
-            }
-            else
-            {
-                rx_lpf_idx = 2;
-            }
-            if (rx_lpf_idx & 1)
-            {
-                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-            }
-            if (rx_lpf_idx & 2)
-            {
-                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-            }
+            *actual = dev->rx_samplerate;
         }
-        else
-        {
-            bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
-            bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
-        }
-        fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
     }
-    dev->rx_lpf_idx = rx_lpf_idx;
     return result;
 }
 //==============================================================================
@@ -1462,17 +1238,12 @@ const double fobos_max2830_adj[] =
     0.90, 0.95, 1.00, 1.05, 1.10
 };
 //==============================================================================
-int fobos_rx_set_bandwidth(struct fobos_dev_t * dev, double value, double * actual)
+static int fobosv2_set_bw(struct fobos_dev_t *dev, double value, double * actual)   
 {
-    int result = fobos_check(dev);
+    int result = FOBOS_ERR_OK;
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(%f)\n", __FUNCTION__, value);
 #endif // FOBOS_PRINT_DEBUG
-    if (result != FOBOS_ERR_OK)
-    {
-        return result;
-    }
-    result = 0;
     uint32_t p1 = 0;
     size_t count = sizeof(fobos_max2830_bws) / sizeof(fobos_max2830_bws[0]);
     double dmin = value;
@@ -1517,44 +1288,751 @@ int fobos_rx_set_bandwidth(struct fobos_dev_t * dev, double value, double * actu
     return result;
 }
 //==============================================================================
-const double fobos_sample_rates[] =
+static int fobosv2_set_autobw(struct fobos_dev_t *dev, uint64_t val)
 {
-    80000000.0,
-    50000000.0,
-    40000000.0,
-    32000000.0,
-    25000000.0,
-    20000000.0,
-    16000000.0,
-    12500000.0,
-    10000000.0,
-    8000000.0
-};
+    return FOBOS_ERR_UNSUPPORTED;
+}
 //==============================================================================
-int fobos_rx_get_samplerates(struct fobos_dev_t * dev, double * values, unsigned int * count)
+static int fobosv2_set_direct_sampling(struct fobos_dev_t *dev, unsigned int enabled)
 {
+    int result = FOBOS_ERR_OK;
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%d);\n", __FUNCTION__, enabled);
+#endif // FOBOS_PRINT_DEBUG
+    if (dev->rx_direct_sampling != enabled)
+    {
+        if (enabled)
+        {
+            if (dev->hw_revision[0] == '2')
+            {
+                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+            }
+            else
+            {
+                bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+                bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+            }
+            bitclear(dev->dev_gpo, FOBOS_DEV_NENBL_HF);
+            dev->cmds->set_dev_gpo(dev, dev->dev_gpo);
+            // disable clocks
+            fobos_rffc507x_clock(dev, 0);
+            fobos_max2830_clock(dev, 0);
+            // disable rffc507x
+            fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x15], 14, 14, 0); // enbl = 0
+            fobos_rffc507x_commit(dev, 0);
+        }
+        else
+        {
+            bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+            bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+            if (dev->rx_lpf_idx > 2)
+            {
+                dev->rx_lpf_idx = 2;
+            }
+            if (dev->hw_revision[0] == '2')
+            {
+                if (dev->rx_lpf_idx & 1)
+                {
+                    bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+                }
+                if (dev->rx_lpf_idx & 2)
+                {
+                    bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+                }
+            }
+            else
+            {
+                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+            }
+            bitset(dev->dev_gpo, FOBOS_DEV_NENBL_HF);
+            dev->cmds->set_dev_gpo(dev, dev->dev_gpo);
+            // enable clocks
+            fobos_rffc507x_clock(dev, 1);
+            fobos_max2830_clock(dev, 1);
+            // enable rffc507x
+            fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x15], 14, 14, 1); // enbl = 1
+            fobos_rffc507x_commit(dev, 0);
+        }
+        dev->rx_direct_sampling = enabled;
+    }
+    return result;
+}
+//==============================================================================
+static int fobosv2_set_clk_source(struct fobos_dev_t *dev, int value)
+{
+    int result;
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%d)\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
+    if (value)
+    {
+        bitclear(dev->dev_gpo, FOBOS_DEV_CLKSEL);
+    }
+    else
+    {
+        bitset(dev->dev_gpo, FOBOS_DEV_CLKSEL);
+    }
+    result = dev->cmds->set_dev_gpo(dev, dev->dev_gpo);
+    return result;
+}
+//==============================================================================
+static int fobosv2_set_lna_gain(struct fobos_dev_t *dev, unsigned int value)
+{
+    int result = FOBOS_ERR_OK;
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%d)\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
+    if (value > 3) value = 3;
+    if (value != dev->rx_lna_gain)
+    {
+        dev->rx_lna_gain = value;
+        int lna_gain = dev->rx_lna_gain & 0x0003;
+        int vga_gain = dev->rx_vga_gain & 0x001F;
+        fobos_max2830_write_reg(dev, 11, (lna_gain << 5) | vga_gain);
+    }
+    return result;
+}
+//==============================================================================
+static int fobosv2_set_vga_gain(struct fobos_dev_t *dev, unsigned int value)
+{
+    int result;
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%d)\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
+    result = FOBOS_ERR_OK;
+    if (value > 31) value = 31;
+    if (value != dev->rx_vga_gain)
+    {
+        dev->rx_vga_gain = value;
+        int lna_gain = dev->rx_lna_gain & 0x0003;
+        int vga_gain = dev->rx_vga_gain & 0x001F;
+        fobos_max2830_write_reg(dev, 11, (lna_gain << 5) | vga_gain);
+    }
+    return result;
+}
+//==============================================================================
+static int fobosv2_set_user_gpo(struct fobos_dev_t *dev, uint8_t value)
+{
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(0x%04x);\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
+    return fobos_fx3_command(dev, 0xE3, value, 0);
+}
+//==============================================================================
+static int fobosv2_set_dev_gpo(struct fobos_dev_t *dev, uint16_t value)
+{
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(0x%04x);\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
+    return fobos_fx3_command(dev, 0xE4, value, 0);
+}
+//==============================================================================
+static int fobosv2_set_lpf(struct fobos_dev_t *dev, double bandwidth)
+{
+    int result;
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%f)\n", __FUNCTION__, bandwidth);
+#endif // FOBOS_PRINT_DEBUG
+    result = 0;
+    int rx_lpf_idx = dev->rx_lpf_idx;
+    if (!dev->rx_direct_sampling)
+    {
+        bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+        bitclear(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+        if (dev->hw_revision[0] == '2')
+        {
+            if (bandwidth < 13000000)
+            {
+                rx_lpf_idx = 0;
+            }
+            else if (bandwidth < 26000000)
+            {
+                rx_lpf_idx = 1;
+            }
+            else
+            {
+                rx_lpf_idx = 2;
+            }
+            if (rx_lpf_idx & 1)
+            {
+                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+            }
+            if (rx_lpf_idx & 2)
+            {
+                bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+            }
+        }
+        else
+        {
+            bitset(dev->dev_gpo, FOBOS_DEV_LPF_A0);
+            bitset(dev->dev_gpo, FOBOS_DEV_LPF_A1);
+        }
+        dev->cmds->set_dev_gpo(dev, dev->dev_gpo);
+    }
+    dev->rx_lpf_idx = rx_lpf_idx;
+    return result;
+}
+//==============================================================================
+static int fobosv2_start_scan(struct fobos_dev_t *dev, uint64_t *frequencies, unsigned int count)
+{
+    return FOBOS_ERR_UNSUPPORTED;
+}
+//==============================================================================
+static int fobosv2_stop_scan(struct fobos_dev_t *dev)
+{
+    return FOBOS_ERR_UNSUPPORTED;
+}
+//==============================================================================
+static int fobosv2_write_firmware(struct fobos_dev_t* dev, const char * file_name, int verbose)
+{
+    int result;
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%s)\n", __FUNCTION__, file_name);
+#endif // FOBOS_PRINT_DEBUG
+    if (dev->rx_sync_started || dev->rx_async_status != FOBOS_IDDLE)
+    {
+        return FOBOS_ERR_UNSUPPORTED;
+    }
+    FILE * f = fopen(file_name, "rb");
+    if (f == 0)
+    {
+        return FOBOS_ERR_UNSUPPORTED;
+    }
+    fseek(f, 0, SEEK_END);
+    size_t file_size = ftell(f);
+    if ((file_size == 0) || (file_size > 0x3FFE0))
+    {
+        fclose(f);
+        return FOBOS_ERR_UNSUPPORTED;
+    }
+    result = 0;
+    size_t xx_size = 1024;
+    size_t xx_count = (file_size + xx_size - 1)/ xx_size;
+    uint8_t * file_data = (uint8_t * )malloc(xx_count * xx_size);
+    fseek(f, 0, SEEK_SET);
+    fread(file_data, file_size, 1, f);
+    fclose(f);
+    memset(file_data + file_size, 0, xx_count * xx_size - file_size);
+    uint16_t xsize;
+    uint8_t req_code = 0xED;
+    uint8_t * xx_data = file_data;
+    if (verbose)
+    {
+        printf_internal("writing a firmware");
+    }
+    for (size_t i = 0; i < xx_count; i++)
+    {
+        if (verbose)
+        {
+            printf_internal(".");
+        }
+        xsize = libusb_control_transfer(dev->libusb_devh, CTRLO, req_code, 0, i, xx_data, xx_size, CTRL_TIMEOUT);
+        if (xsize != xx_size)
+        {
+            result = FOBOS_ERR_CONTROL;
+        }
+        xx_data += xx_size;
+    }
+    if (verbose)
+    {
+        printf_internal("done.\n");
+    }
+    free(file_data);
+    return result;
+}
+//==============================================================================
+static int fobosv2_read_firmware(struct fobos_dev_t* dev, const char * file_name, int verbose)
+{
+    int result;
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%s)\n", __FUNCTION__, file_name);
+#endif // FOBOS_PRINT_DEBUG
+    if (dev->rx_sync_started || dev->rx_async_status != FOBOS_IDDLE)
+    {
+        return FOBOS_ERR_UNSUPPORTED;
+    }
+    FILE * f = fopen(file_name, "wb");
+    if (f == 0)
+    {
+        return FOBOS_ERR_UNSUPPORTED;
+    }
+    result = 0;
+    size_t xx_size = 1024;
+    size_t xx_count = 130;
+    uint8_t * xx_data = (uint8_t * )malloc(xx_size);
+    uint16_t xsize;
+    uint8_t req_code = 0xEC;
+    if (verbose)
+    {
+        printf_internal("reading a firmware");
+    }
+    for (size_t i = 0; i < xx_count; i++)
+    {
+        if (verbose)
+        {
+            printf_internal(".");
+        }
+        xsize = libusb_control_transfer(dev->libusb_devh, CTRLI, req_code, 0, i, xx_data, xx_size, CTRL_TIMEOUT);
+        if (xsize != xx_size)
+        {
+            result = FOBOS_ERR_CONTROL;
+        }
+        fwrite(xx_data, xx_size, 1, f);
+    }
+    fclose(f);
+    if (verbose)
+    {
+        printf_internal("done.\n");
+    }
+    free(xx_data);
+    return result;
+}
+//==============================================================================
+int fobosv2_read_user(struct fobos_dev_t * dev, void * data, int size)
+{
+    return FOBOS_ERR_UNSUPPORTED;
+}
+//==============================================================================
+int fobosv2_write_user(struct fobos_dev_t * dev, void * data, int size)
+{
+    return FOBOS_ERR_UNSUPPORTED;
+}
+//==============================================================================
+// common to all fobos sdrs
+//==============================================================================
+int fobos_rx_get_api_info(char * lib_version, char * drv_version)
+{
+    if (lib_version)
+    {
+        strcpy(lib_version, LIB_VERSION" "__DATE__" "__TIME__);
+    }
+    if (drv_version)
+    {
+        strcpy(drv_version, DRV_VERSION);
+    }
+    return 0;
+}
+//==============================================================================
+int fobos_rx_get_device_count(void)
+{
+    int i;
+    int result;
+    libusb_context *ctx;
+    libusb_device **list;
+    uint32_t device_count = 0;
+    struct libusb_device_descriptor dd;
+    ssize_t cnt;
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s();\n", __FUNCTION__);
+#endif // FOBOS_PRINT_DEBUG
+    result = libusb_init(&ctx);
+    if (result < 0)
+    {
+        return 0;
+    }
+    cnt = libusb_get_device_list(ctx, &list);
+    for (i = 0; i < cnt; i++)
+    {
+        libusb_get_device_descriptor(list[i], &dd);
+#ifdef FOBOS_PRINT_DEBUG
+        printf_internal("%04x:%04x\n", dd.idVendor, dd.idProduct);
+#endif // FOBOS_PRINT_DEBUG        
+        if ((dd.idVendor == FOBOS_VENDOR_ID) &&
+            (dd.idProduct == FOBOS_PRODUCT_ID) &&
+            (dd.bcdDevice == FOBOS_DEV_ID))
+        {
+            device_count++;
+        }
+    }
+    libusb_free_device_list(list, 1);
+    libusb_exit(ctx);
+    return device_count;
+}
+//==============================================================================
+int fobos_rx_list_devices(char * serials)
+{
+    int i;
+    int result;
+    libusb_context *ctx;
+    libusb_device **list;
+    uint32_t device_count = 0;
+    struct libusb_device_descriptor dd;
+    ssize_t cnt;
+    libusb_device_handle *handle;
+    char string[256];
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s();\n", __FUNCTION__);
+#endif // FOBOS_PRINT_DEBUG
+
+    if (!serials)
+    {
+        return 0;
+    }
+
+    serials[0] = 0;
+    memset(string, 0, sizeof(string));
+    result = libusb_init(&ctx);
+    if (result < 0)
+    {
+        return 0;
+    }
+    cnt = libusb_get_device_list(ctx, &list);
+    for (i = 0; i < cnt; i++)
+    {
+        libusb_get_device_descriptor(list[i], &dd);
+        if ((dd.idVendor == FOBOS_VENDOR_ID) &&
+            (dd.idProduct == FOBOS_PRODUCT_ID) &&
+            (dd.bcdDevice == FOBOS_DEV_ID))
+        {
+            if (serials)
+            {
+                handle = 0;
+                result = libusb_open(list[i], &handle);
+                if ((result == 0) && (handle))
+                {
+                    result = libusb_get_string_descriptor_ascii(handle, dd.iSerialNumber, (unsigned char*)string, sizeof(string));
+                    if (result > 0)
+                    {
+                        serials = strcat(serials, string);
+                    }
+                    libusb_close(handle);
+                }
+                else
+                {
+                    serials = strcat(serials, "XXXXXXXXXXXX");
+                }
+                serials = strcat(serials, " ");
+            }
+            device_count++;
+        }
+    }
+    libusb_free_device_list(list, 1);
+    libusb_exit(ctx);
+    return device_count;
+}
+//==============================================================================
+int fobos_check(struct fobos_dev_t * dev)
+{
+    if (dev != NULL)
+    {
+        if ((dev->libusb_ctx != NULL) && (dev->libusb_devh != NULL) && (dev->cmds != NULL))
+        {
+            return FOBOS_ERR_OK;
+        }
+        return FOBOS_ERR_NOT_OPEN;
+    }
+    return FOBOS_ERR_NO_DEV;
+}
+//==============================================================================
+int fobos_rx_set_user_gpo(struct fobos_dev_t * dev, uint8_t value)
+{
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(0x%04x);\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
+    int result;
+
+    result = fobos_check(dev);
+    if (result == FOBOS_ERR_OK)
+    {
+        result = dev->cmds->set_user_gpo(dev, value);
+    }
+    return result;
+}
+//==============================================================================
+int fobos_rx_set_dev_gpo(struct fobos_dev_t * dev, uint16_t value)
+{
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(0x%04x);\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
+    int result;
+
+    result = fobos_check(dev);
+    if (result == FOBOS_ERR_OK)
+    {
+        result = dev->cmds->set_dev_gpo(dev, value);
+    }
+    return result;
+}
+//==============================================================================
+int fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index)
+{
+    int result = 0;
+    int i = 0;
+    struct fobos_dev_t * dev = NULL;
+    libusb_device **dev_list;
+    libusb_device *device = NULL;
+    ssize_t cnt;
+    uint32_t device_count = 0;
+    struct libusb_device_descriptor dd;
+    dev = (struct fobos_dev_t*)malloc(sizeof(struct fobos_dev_t));
+    if (NULL == dev)
+    {
+        return FOBOS_ERR_NO_MEM;
+    }
+    memset(dev, 0, sizeof(struct fobos_dev_t));
+    result = libusb_init(&dev->libusb_ctx);
+    if (result < 0)
+    {
+        free(dev);
+        return result;
+    }
+    cnt = libusb_get_device_list(dev->libusb_ctx, &dev_list);
+    for (i = 0; i < cnt; i++)
+    {
+        libusb_get_device_descriptor(dev_list[i], &dd);
+        if ((dd.idVendor == FOBOS_VENDOR_ID) &&
+            (dd.idProduct == FOBOS_PRODUCT_ID) &&
+            (dd.bcdDevice == FOBOS_DEV_ID))
+        {
+            if (index == device_count)
+            {
+                device = dev_list[i];
+                break;
+            }
+            device_count++;
+        }
+    }
+    if (device)
+    {
+        result = libusb_open(device, &dev->libusb_devh);
+        if (result == 0)
+        {
+            libusb_get_string_descriptor_ascii(dev->libusb_devh, dd.iSerialNumber, (unsigned char*)dev->serial, sizeof(dev->serial));
+            libusb_get_string_descriptor_ascii(dev->libusb_devh, dd.iManufacturer, (unsigned char*)dev->manufacturer, sizeof(dev->manufacturer));
+            libusb_get_string_descriptor_ascii(dev->libusb_devh, dd.iProduct, (unsigned char*)dev->product, sizeof(dev->product));
+            result = libusb_claim_interface(dev->libusb_devh, 0);
+            if (result == 0)
+            {
+                *out_dev = dev;
+                //======================================================================
+                result  = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 0, 0, (unsigned char*)dev->hw_revision, sizeof(dev->hw_revision), CTRL_TIMEOUT);
+                if (result <= 0)
+                {
+                    strcpy(dev->hw_revision, "2.0.0");
+                }
+                result = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 1, 0, (unsigned char*)dev->fw_version, sizeof(dev->fw_version), CTRL_TIMEOUT);
+                if (result <= 0)
+                {
+                    strcpy(dev->hw_revision, "2.0.0");
+                }
+                result = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 2, 0, (unsigned char*)dev->fw_build, sizeof(dev->fw_build), CTRL_TIMEOUT);
+                if (result <= 0)
+                {
+                    strcpy(dev->fw_build, "unknown");
+                }
+                //======================================================================
+                dev->cmds = &fobosv2_cmds;
+                if (dev->cmds->open(dev) == FOBOS_ERR_OK)
+                {
+                    libusb_free_device_list(dev_list, 1);
+                    return FOBOS_ERR_OK;
+                }
+            }
+            else
+            {
+                printf_internal("usb_claim_interface error %d\n", result);
+            }
+        }
+        else
+        {
+            printf_internal("usb_open error %d\n", result);
+#ifndef _WIN32
+            if (result == LIBUSB_ERROR_ACCESS)
+            {
+                printf_internal("Please fix the device permissions by installing fobos-sdr.rules\n");
+            }
+#endif
+        }
+    }
+    libusb_free_device_list(dev_list, 1);
+    if (dev->libusb_devh)
+    {
+        libusb_close(dev->libusb_devh);
+    }
+    if (dev->libusb_ctx)
+    {
+        libusb_exit(dev->libusb_ctx);
+    }
+    free(dev);
+    return FOBOS_ERR_NO_DEV;
+}
+//==============================================================================
+int fobos_rx_close(struct fobos_dev_t * dev)
+{
+    int result = fobos_check(dev);
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s();\n", __FUNCTION__);
+#endif // FOBOS_PRINT_DEBUG
+    if (result != FOBOS_ERR_OK)
+    {
+        return result;
+    }
+    fobos_rx_cancel_async(dev);
+    fobos_rx_stop_sync(dev);
+    while (FOBOS_IDDLE != dev->rx_async_status)
+    {
+#ifdef FOBOS_PRINT_DEBUG
+        printf_internal("s");
+#endif
+#ifdef _WIN32
+        Sleep(1);
+#else
+        sleep(1);
+#endif
+    }
+
+    dev->cmds->close(dev);
+
+    if (dev->do_reset)
+    {
+        libusb_control_transfer(dev->libusb_devh, CTRLO, 0xE0, 0, 0, 0, 0, CTRL_TIMEOUT);
+    }
+    libusb_close(dev->libusb_devh);
+    libusb_exit(dev->libusb_ctx);
+    free(dev);
+    return result;
+}
+//==============================================================================
+int fobos_rx_reset(struct fobos_dev_t * dev)
+{
+    int result = fobos_check(dev);
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s();\n", __FUNCTION__);
+#endif // FOBOS_PRINT_DEBUG
+    if (result != FOBOS_ERR_OK)
+    {
+        return result;
+    }
+    dev->do_reset = 1;
+    return fobos_rx_close(dev);
+}
+//==============================================================================
+int fobos_rx_get_board_info(struct fobos_dev_t * dev, char * hw_revision, char * fw_version, char * manufacturer, char * product, char * serial)
+{
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s();\n", __FUNCTION__);
+#endif // FOBOS_PRINT_DEBUG
     int result = fobos_check(dev);
     if (result != FOBOS_ERR_OK)
     {
         return result;
     }
-    result = 0;
-    if (count)
+    if (hw_revision)
     {
-        *count = sizeof(fobos_sample_rates) / sizeof(fobos_sample_rates[0]);
-        if (values)
-        {
-            memcpy(values, fobos_sample_rates, sizeof(fobos_sample_rates));
-        }
+        strcpy(hw_revision, dev->hw_revision);
+    }
+    if (fw_version)
+    {
+        strcpy(fw_version, dev->fw_version);
+        strcat(fw_version, " ");
+        strcat(fw_version, dev->fw_build);
+    }
+    if (manufacturer)
+    {
+        strcpy(manufacturer, dev->manufacturer);
+    }
+    if (product)
+    {
+        strcpy(product, dev->product);
+    }
+    if (serial)
+    {
+        strcpy(serial, dev->serial);
     }
     return result;
 }
 //==============================================================================
-const uint32_t fobos_p1s[] =
+int fobos_rx_set_frequency(struct fobos_dev_t * dev, double value, double * actual)
 {
-    10, 
-    16, 20, 25, 32, 40, 50, 64, 80, 100
-};
+    int result = fobos_check(dev);
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%f);\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG    
+    if (result == FOBOS_ERR_OK)
+    {
+        result = dev->cmds->set_freq(dev, value, actual);
+    }
+    return result;
+}
+//==============================================================================
+int fobos_rx_set_direct_sampling(struct fobos_dev_t * dev, unsigned int enabled)
+{
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%d)\n", __FUNCTION__, enabled);
+#endif // FOBOS_PRINT_DEBUG
+    int result = fobos_check(dev);
+    if (result == FOBOS_ERR_OK)
+    {
+        result = dev->cmds->set_direct_sampling(dev, enabled);
+    }
+    return result;
+}
+//==============================================================================
+int fobos_rx_set_lna_gain(struct fobos_dev_t * dev, unsigned int value)
+{
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%d)\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
+    int result = fobos_check(dev);
+    if (result == FOBOS_ERR_OK)
+    {
+        result = dev->cmds->set_lna_gain(dev, value);
+    }
+    return result;
+}
+//==============================================================================
+int fobos_rx_set_vga_gain(struct fobos_dev_t * dev, unsigned int value)
+{
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%d)\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
+    int result = fobos_check(dev);
+    if (result == FOBOS_ERR_OK)
+    {
+        dev->cmds->set_vga_gain(dev, value);
+    }
+    return result;
+}
+//==============================================================================
+int fobos_rx_set_lpf(struct fobos_dev_t * dev, double bandwidth)
+{
+    int result = fobos_check(dev);
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%f)\n", __FUNCTION__, bandwidth);
+#endif // FOBOS_PRINT_DEBUG
+    if (result == FOBOS_ERR_OK)
+    {
+        result = dev->cmds->set_lpf(dev, bandwidth);
+    }
+    return result;
+}
+
+//==============================================================================
+int fobos_rx_set_bandwidth(struct fobos_dev_t * dev, double value, double * actual)
+{
+   int result = fobos_check(dev);
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%f)\n", __FUNCTION__, value);
+#endif // FOBOS_PRINT_DEBUG
+    if (result == FOBOS_ERR_OK)
+    {
+        result = dev->cmds->set_bw(dev, value, actual);
+    }
+    return result;
+}
+
+//==============================================================================
+int fobos_rx_get_samplerates(struct fobos_dev_t * dev, double * values, unsigned int * count)
+{
+    int result = fobos_check(dev);
+    if (result == FOBOS_ERR_OK)
+    {
+        result = dev->cmds->get_srates(dev, values, count);
+    }
+    return result;
+}
 //==============================================================================
 int fobos_rx_set_samplerate(struct fobos_dev_t * dev, double value, double * actual)
 {
@@ -1562,38 +2040,9 @@ int fobos_rx_set_samplerate(struct fobos_dev_t * dev, double value, double * act
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(%f)\n", __FUNCTION__, value);
 #endif // FOBOS_PRINT_DEBUG
-    if (result != FOBOS_ERR_OK)
+    if (result == FOBOS_ERR_OK)
     {
-        return result;
-    }
-    result = 0;
-    uint32_t p1 = 0;
-    size_t count = sizeof(fobos_sample_rates) / sizeof(fobos_sample_rates[0]);
-    double df_min = fobos_sample_rates[0];
-    size_t i_min = 0;
-    for (size_t i = 0; i < count; i++)
-    {
-        double df = fabs(value - fobos_sample_rates[i]);
-        if (df < df_min)
-        {
-            df_min = df;
-            i_min = i;
-        }
-    }
-    p1 = fobos_p1s[i_min] * 128 - 512;
-    fobos_si5351c_config_msynth(dev, 2, p1, 0, 1, 0);
-    fobos_si5351c_config_msynth(dev, 3, p1, 0, 1, 0);
-    value = fobos_sample_rates[i_min];
-    if (result == 0)
-    {
-        double bandwidth = value * 0.8;
-        fobos_rx_set_lpf(dev, bandwidth);
-        fobos_rx_set_bandwidth(dev, bandwidth, 0);
-        dev->rx_samplerate = value;
-        if (actual)
-        {
-            *actual = dev->rx_samplerate;
-        }
+        result = dev->cmds->set_srate(dev, value, actual);
     }
     return result;
 }
@@ -1604,19 +2053,10 @@ int fobos_rx_set_clk_source(struct fobos_dev_t * dev, int value)
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(%d)\n", __FUNCTION__, value);
 #endif // FOBOS_PRINT_DEBUG
-    if (result != FOBOS_ERR_OK)
+    if (result == FOBOS_ERR_OK)
     {
-        return result;
+        result = dev->cmds->set_clk_source(dev, value);
     }
-    if (value)
-    {
-        bitclear(dev->dev_gpo, FOBOS_DEV_CLKSEL);
-    }
-    else
-    {
-        bitset(dev->dev_gpo, FOBOS_DEV_CLKSEL);
-    }
-    result = fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
     return result;
 }
 //==============================================================================
@@ -2001,10 +2441,7 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
 
     dev->rx_buff = (float*)malloc(buf_length * 2 * sizeof(float));
 
-    fobos_fx3_command(dev, 0xE1, 1, 0);        // start fx
-
-    bitclear(dev->dev_gpo, FOBOS_DEV_ADC_SDI);
-    fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
+    dev->cmds->start(dev, 0);
 
     for (size_t i = 0; i < dev->transfer_buf_count; ++i)
     {
@@ -2020,7 +2457,7 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
         result = libusb_submit_transfer(dev->transfer[i]);
         if (result < 0)
         {
-            printf_internal("Failed to submit transfer #%i, err %i\n", i, result);
+            printf_internal("Failed to submit transfer #%li, err %i\n", i, result);
             dev->rx_async_status = FOBOS_CANCELING;
             break;
         }
@@ -2065,7 +2502,7 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
                     libusb_handle_events_timeout_completed(dev->libusb_ctx, &tvx, NULL);
                     if (result < 0)
                     {
-                        printf_internal("libusb_cancel_transfer[%d] returned: %d %s\n", i, result, libusb_error_name(result));
+                        printf_internal("libusb_cancel_transfer[%ld] returned: %d %s\n", i, result, libusb_error_name(result));
                         continue;
                     }
                     dev->rx_async_status = FOBOS_CANCELING;
@@ -2078,12 +2515,11 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
             }
         }
     }
-    fobos_fx3_command(dev, 0xE1, 0, 0);       // stop fx
+
+    dev->cmds->stop(dev);
     fobos_free_buffers(dev);
     free(dev->rx_buff);
     dev->rx_buff = NULL;
-    bitset(dev->dev_gpo, FOBOS_DEV_ADC_SDI);
-    fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
     dev->rx_async_status = FOBOS_IDDLE;
     dev->rx_async_cancel = 0;
     return result;
@@ -2140,9 +2576,7 @@ int fobos_rx_start_sync(struct fobos_dev_t * dev, uint32_t buf_length)
         dev->transfer_buf_size = 0;
         return FOBOS_ERR_NO_MEM;
     }
-    fobos_fx3_command(dev, 0xE1, 1, 0);        // start fx
-    bitclear(dev->dev_gpo, FOBOS_DEV_ADC_SDI);
-    fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
+    dev->cmds->start(dev, 0);
     dev->rx_sync_started = 1;
     return FOBOS_ERR_OK;
 }
@@ -2193,8 +2627,7 @@ int fobos_rx_stop_sync(struct fobos_dev_t * dev)
     result = 0;
     if (dev->rx_sync_started)
     {
-        bitset(dev->dev_gpo, FOBOS_DEV_ADC_SDI);
-        fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
+        dev->cmds->stop(dev);
         free(dev->rx_sync_buf);
         dev->rx_sync_buf = NULL;
         free(dev->rx_buff);
@@ -2210,59 +2643,10 @@ int fobos_rx_write_firmware(struct fobos_dev_t* dev, const char * file_name, int
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(%s)\n", __FUNCTION__, file_name);
 #endif // FOBOS_PRINT_DEBUG
-    if (result != FOBOS_ERR_OK)
+    if (result == FOBOS_ERR_OK)
     {
-        return result;
+        result = dev->cmds->write_firmware(dev, file_name, verbose);
     }
-    if (dev->rx_sync_started || dev->rx_async_status != FOBOS_IDDLE)
-    {
-        return FOBOS_ERR_UNSUPPORTED;
-    }
-    FILE * f = fopen(file_name, "rb");
-    if (f == 0)
-    {
-        return FOBOS_ERR_UNSUPPORTED;
-    }
-    fseek(f, 0, SEEK_END);
-    size_t file_size = ftell(f);
-    if ((file_size == 0) || (file_size > 0x3FFE0))
-    {
-        fclose(f);
-        return FOBOS_ERR_UNSUPPORTED;
-    }
-    result = 0;
-    size_t xx_size = 1024;
-    size_t xx_count = (file_size + xx_size - 1)/ xx_size;
-    uint8_t * file_data = (uint8_t * )malloc(xx_count * xx_size);
-    fseek(f, 0, SEEK_SET);
-    fread(file_data, file_size, 1, f);
-    fclose(f);
-    memset(file_data + file_size, 0, xx_count * xx_size - file_size);
-    uint16_t xsize;
-    uint8_t req_code = 0xED;
-    uint8_t * xx_data = file_data;
-    if (verbose)
-    {
-        printf_internal("writing a firmware");
-    }
-    for (size_t i = 0; i < xx_count; i++)
-    {
-        if (verbose)
-        {
-            printf_internal(".");
-        }
-        xsize = libusb_control_transfer(dev->libusb_devh, CTRLO, req_code, 0, i, xx_data, xx_size, CTRL_TIMEOUT);
-        if (xsize != xx_size)
-        {
-            result = FOBOS_ERR_CONTROL;
-        }
-        xx_data += xx_size;
-    }
-    if (verbose)
-    {
-        printf_internal("done.\n");
-    }
-    free(file_data);
     return result;
 }
 //==============================================================================
@@ -2272,48 +2656,10 @@ int fobos_rx_read_firmware(struct fobos_dev_t* dev, const char * file_name, int 
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(%s)\n", __FUNCTION__, file_name);
 #endif // FOBOS_PRINT_DEBUG
-    if (result != FOBOS_ERR_OK)
+    if (result == FOBOS_ERR_OK)
     {
-        return result;
+        result = dev->cmds->read_firmware(dev, file_name, verbose);
     }
-    if (dev->rx_sync_started || dev->rx_async_status != FOBOS_IDDLE)
-    {
-        return FOBOS_ERR_UNSUPPORTED;
-    }
-    FILE * f = fopen(file_name, "wb");
-    if (f == 0)
-    {
-        return FOBOS_ERR_UNSUPPORTED;
-    }
-    result = 0;
-    size_t xx_size = 1024;
-    size_t xx_count = 130;
-    uint8_t * xx_data = (uint8_t * )malloc(xx_size);
-    uint16_t xsize;
-    uint8_t req_code = 0xEC;
-    if (verbose)
-    {
-        printf_internal("reading a firmware");
-    }
-    for (size_t i = 0; i < xx_count; i++)
-    {
-        if (verbose)
-        {
-            printf_internal(".");
-        }
-        xsize = libusb_control_transfer(dev->libusb_devh, CTRLI, req_code, 0, i, xx_data, xx_size, CTRL_TIMEOUT);
-        if (xsize != xx_size)
-        {
-            result = FOBOS_ERR_CONTROL;
-        }
-        fwrite(xx_data, xx_size, 1, f);
-    }
-    fclose(f);
-    if (verbose)
-    {
-        printf_internal("done.\n");
-    }
-    free(xx_data);
     return result;
 }
 //==============================================================================
@@ -2330,6 +2676,7 @@ const char * fobos_rx_error_name(int error)
         case FOBOS_ERR_SYNC_NOT_STARTED: return "Sync mode is not started";
         case FOBOS_ERR_UNSUPPORTED:      return "Unsuppotred parameter or mode";
         case FOBOS_ERR_LIBUSB:           return "libusb error";
+        case FOBOS_ERR_BAD_PARAM:        return "Bad parameter";
         default:   return "Unknown error";
     }
 }

@@ -49,6 +49,7 @@ endif(NOT CMAKE_BUILD_TYPE)
 ########################################################################
 if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
     ADD_DEFINITIONS(-Wall)
+    #ADD_DEFINITIONS(-Wconversion)
     ADD_DEFINITIONS(-Wextra)
     ADD_DEFINITIONS(-Wno-unused-parameter)
     ADD_DEFINITIONS(-Wno-unused)
