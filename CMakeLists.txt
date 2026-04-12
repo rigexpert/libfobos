@@ -269,6 +269,27 @@ target_include_directories(fobos_fwloader PRIVATE ${CMAKE_SOURCE_DIR})
 target_include_directories(fobos_fwloader PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 ########################################################################
 
+########################################################################
+# Create executable fobos_sdr_scanner
+########################################################################
+add_executable(fobos_scanner 
+    eval/fobos_scanner_main.c 
+    wav/wav_file.c)
+
+target_compile_options(fobos_scanner PUBLIC -std=c99)
+
+target_link_libraries(fobos_scanner PRIVATE libfobos)
+
+if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
+    target_link_libraries(fobos_scanner PRIVATE ${LIBUSB_LIBRARIES})
+else()
+    target_link_directories(fobos_scanner PRIVATE ${LIBUSB_LIBRARIES})
+endif()
+
+target_include_directories(fobos_scanner PRIVATE ${CMAKE_SOURCE_DIR})
+
+target_include_directories(fobos_scanner PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
+########################################################################
 
 ########################################################################
 # Directories
