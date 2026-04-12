@@ -51,6 +51,7 @@ extern "C"
 struct fobos_sdr_dev_t;
 typedef void(*fobos_rx_cb_t)(float *buf, uint32_t buf_length, void *ctx);
 typedef void(*fobos_sdr_cb_t)(float *buf, uint32_t buf_length, struct fobos_sdr_dev_t* sender, void *user);
+typedef void(*fobos_rx_cb_raw_t)(uint16_t *buf, uint32_t buf_length, int need_to_swap_iq, void *ctx);
 //==============================================================================
 // obtain the software info
 API_EXPORT int CALL_CONV fobos_rx_get_api_info(char * lib_version, char * drv_version);
@@ -80,8 +81,10 @@ API_EXPORT int CALL_CONV fobos_rx_set_vga_gain(struct fobos_dev_t * dev, unsigne
 API_EXPORT int CALL_CONV fobos_rx_get_samplerates(struct fobos_dev_t * dev, double * values, unsigned int * count);
 // set sample rate nearest to specified
 API_EXPORT int CALL_CONV fobos_rx_set_samplerate(struct fobos_dev_t * dev, double value, double * actual);
-// statr the iq rx streaming
+// start the iq rx streaming
 API_EXPORT int CALL_CONV fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, uint32_t buf_count, uint32_t buf_length);
+// start the raw uint16_t iq rx streaming
+int fobos_rx_read_async_raw(struct fobos_dev_t * dev, fobos_rx_cb_raw_t cb, void *ctx, uint32_t buf_count, uint32_t buf_length);
 // stop the iq rx streaming
 API_EXPORT int CALL_CONV fobos_rx_cancel_async(struct fobos_dev_t * dev);
 // set user general purpose output bits (0x00 .. 0xFF)
@@ -270,3 +273,4 @@ API_EXPORT const char * CALL_CONV fobos_sdr_error_name(int error);
 #endif
 #endif // !LIB_FOBOS_H
 //==============================================================================
+

@@ -33,6 +33,9 @@ endif()
 include(GNUInstallDirs)
 message(>>> "CMAKE_INSTALL_LIBDIR: " ${CMAKE_INSTALL_LIBDIR})
 set(CMAKE_C_FLAGS, "${CMAKE_C_FLAGS} -std=c99")
+#set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -DFOBOS_PRINT_DEBUG")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g")
+
 ########################################################################
 
 ########################################################################

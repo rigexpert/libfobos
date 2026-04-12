@@ -158,7 +158,9 @@ struct fobos_dev_t
     double rx_scan_freqs[FOBOS_MAX_FREQS_CNT];
     fobos_rx_cb_t rx_cb;
     fobos_sdr_cb_t rx_sdr_cb;
+    fobos_rx_cb_raw_t rx_cb_raw;
     void *rx_cb_ctx;
+    void *rx_cb_raw_ctx;
     volatile enum fobos_async_status rx_async_status;
     int rx_async_cancel;
     uint32_t rx_failures;
@@ -170,7 +172,8 @@ struct fobos_dev_t
     float rx_avg_im;
     float rx_scale_re;
     float rx_scale_im;
-    float * rx_buff;
+    float *rx_buff;
+    uint8_t *rx_tmp_buf[0x4000];
     double max2830_clock;
     uint64_t rffc507x_clock;
     uint16_t rffc507x_registers_local[31];
@@ -2803,58 +2806,20 @@ void fobos_rx_convert_samples(struct fobos_dev_t * dev, void * data, size_t size
     dev->rx_dc_im = dc_im;
 }
 //==============================================================================
-void fobos_rx_convert_all(struct fobos_dev_t * dev, unsigned char * data, size_t size, float * dst_samples)
+static void fobos_float_raw_callback(uint16_t *buf, uint32_t buf_length, int need_to_swap_iq, void *ctx)
 {
-    int is_swapped = 0;
-    size_t i0 = 0;
-    size_t i1 = 0;
+   struct fobos_dev_t *dev = (struct fobos_dev_t *)ctx;
 
-    //if (dev->rx_buff_counter % 256 == 0)
-    //{
-    //    print_buff(data, 32);
-    //}
-    if (dev->fw_version[0] == '3' || dev->fw_version[0] == '4')
-    {
-        uint16_t* ps = (uint16_t*)data;
-        uint16_t p0 = ps[0];
-        uint16_t p1 = ps[1];
-
-        i0 = (p0 & p1 & 0x4000); // i0 = 0x4000 if swapped and 0 if not swapped, nearly same as is_swapped but mask
-        i1 = i0 ^ 0x4000; // inverted i0, i1 == 0x4000 if not swapped and 0 if swapped
-        is_swapped = i0 != 0; //((p0 & 0x4000) && (p1 & 0x4000)); // bits in p1 and p0 are set
-        dev->rx_swap_iq = ((p0 & 0x8000) && (p1 & 0x8000)); // highest bit of p0 and p1 is set, ture if swapped by HW
-
-        if (dev->rx_scan_active)
-        {
-            dev->rx_scan_freq_index = -1;
-            ps += (i0 / 2);
-            p0 = ps[0] & 0x3FFF;
-            p1 = ps[1] & 0x3FFF;
-            if ((p0 == 0x2AAA) && (p1 == 0x1555))
-            {
-                dev->rx_scan_freq_index = ps[2] & ps[3];
-                //printf_internal("%d ", dev->rx_scan_freq_index);
-                ps[0] = ps[4];
-                ps[1] = ps[5];
-                ps[2] = ps[6];
-                ps[3] = ps[7];
-            }
-        }
-    }
-    if (is_swapped)
-    {
-        //printf_internal("w");
-        size_t pairs_count = size / 0x8000;
-        for (size_t p = 0; p < pairs_count; p++)
-        {
-            fobos_rx_convert_samples(dev, data + p * 0x8000 + i0, 0x4000, dst_samples + p * 0x4000 + 0x0000);
-            fobos_rx_convert_samples(dev, data + p * 0x8000 + i1, 0x4000, dst_samples + p * 0x4000 + 0x2000);
-        }
-    }
-    else
-    {
-        fobos_rx_convert_samples(dev, data, size, dst_samples);
-    }
+   fobos_rx_convert_samples(dev, buf, buf_length, dev->rx_buff);
+   size_t complex_samples_count = buf_length / 4;
+   if (dev->rx_cb)
+   {
+       dev->rx_cb(dev->rx_buff, complex_samples_count, dev->rx_cb_ctx);
+   }
+   else if (dev->rx_sdr_cb)
+   {
+       dev->rx_sdr_cb(dev->rx_buff, complex_samples_count, dev, dev->rx_cb_ctx);
+   }
 }
 //==============================================================================
 int fobos_alloc_buffers(struct fobos_dev_t *dev)
@@ -2977,6 +2942,89 @@ int fobos_free_buffers(struct fobos_dev_t *dev)
     return FOBOS_ERR_OK;
 }
 //==============================================================================
+static int fobos_preprocess_buffer(struct fobos_dev_t *dev, uint8_t *data, size_t size)
+{
+    int is_swapped = 0;
+    size_t i0 = 0;
+    size_t i1 = 0;
+    int rx_swap_iq = 0;
+
+    //if (dev->rx_buff_counter % 256 == 0)
+    //{
+    //    print_buff(data, 32);
+    //}
+    if (dev->fw_version[0] == '3' || dev->fw_version[0] == '4')
+    {
+        uint16_t* ps = (uint16_t*)data;
+        uint16_t p0 = ps[0];
+        uint16_t p1 = ps[1];
+
+        i0 = (p0 & p1 & 0x4000); // i0 = 0x4000 if swapped and 0 if not swapped, nearly same as is_swapped but mask
+        i1 = i0 ^ 0x4000; // inverted i0, i1 == 0x4000 if not swapped and 0 if swapped
+        is_swapped = i0 != 0; //((p0 & 0x4000) && (p1 & 0x4000)); // bits in p1 and p0 are set
+        dev->rx_swap_iq = ((p0 & 0x8000) && (p1 & 0x8000)); // highest bit of p0 and p1 is set, ture if swapped by HW
+
+        if (dev->rx_scan_active)
+        {
+            dev->rx_scan_freq_index = -1;
+            ps += (i0 / 2);
+            p0 = ps[0] & 0x3FFF;
+            p1 = ps[1] & 0x3FFF;
+            if ((p0 == 0x2AAA) && (p1 == 0x1555))
+            {
+                dev->rx_scan_freq_index = ps[2] & ps[3];
+                //printf_internal("%d ", dev->rx_scan_freq_index);
+                ps[0] = ps[4];
+                ps[1] = ps[5];
+                ps[2] = ps[6];
+                ps[3] = ps[7];
+            }
+        }
+    }
+    else
+    {
+       if (dev->rx_direct_sampling)
+       {
+           rx_swap_iq = FOBOS_SWAP_IQ_HW;
+       }
+    }
+
+    rx_swap_iq = rx_swap_iq | (dev->rx_swap_iq ^ FOBOS_SWAP_IQ_HW);
+
+    if (is_swapped)
+    {
+        //printf_internal("W");
+        size_t pairs_count = size / 0x8000;
+
+        uint16_t *aptr = (uint16_t*)data;
+        uint16_t *bptr = aptr+0x2000;
+        for (size_t p = 0; p < pairs_count; p++)
+        {
+#if 1
+            memmove(dev->rx_tmp_buf, aptr, 0x4000);
+            memmove(aptr,            bptr, 0x4000);
+            memmove(bptr, dev->rx_tmp_buf, 0x4000);
+            aptr[0] = aptr[0] & 0x3fff;
+            aptr[1] = aptr[1] & 0x3fff;
+            bptr[0] = bptr[0] & 0x3fff;
+            bptr[1] = bptr[1] & 0x3fff;
+            aptr+= 0x4000;
+            bptr+= 0x4000;
+#else
+            memmove(dev->rx_tmp_buf           , data + p * 0x8000 + 0x0000, 0x4000);
+            memmove(data + p * 0x8000 + 0x0000, data + p * 0x8000 + 0x4000, 0x4000);
+            memmove(data + p * 0x8000 + 0x4000, dev->rx_tmp_buf           , 0x4000);
+#endif
+        }
+    }
+    else
+    {
+        //printf_internal("X");
+    }
+
+    return rx_swap_iq;
+}
+//==============================================================================
 static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
 {
     struct fobos_dev_t *dev = (struct fobos_dev_t *)transfer->user_data;
@@ -2987,8 +3035,12 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
         {
            if (FOBOS_CANCELING != dev->rx_async_status)
            {
+
+               int need_to_swap_iq = fobos_preprocess_buffer(dev, transfer->buffer, transfer->actual_length);
+
                //printf_internal(".");
                dev->rx_buff_counter++;
+               /*
                fobos_rx_convert_all(dev, transfer->buffer, transfer->actual_length, dev->rx_buff);
                size_t complex_samples_count = transfer->actual_length / 4;
                if (dev->rx_cb)
@@ -2998,7 +3050,13 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
                else if (dev->rx_sdr_cb)
                {
                    dev->rx_sdr_cb(dev->rx_buff, complex_samples_count, dev, dev->rx_cb_ctx);
+               }*/
+
+               if (dev->rx_cb_raw)
+               {
+                   dev->rx_cb_raw((uint16_t*)transfer->buffer, transfer->actual_length, need_to_swap_iq, dev->rx_cb_raw_ctx);
                }
+
            }
            else
            {
@@ -3033,7 +3091,7 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
     }
 }
 //==============================================================================
-static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_t cb, fobos_sdr_cb_t sdr_cb, void *ctx, uint32_t buf_count, uint32_t buf_length)
+static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_raw_t raw_cb, void *raw_ctx, fobos_rx_cb_t cb, fobos_sdr_cb_t sdr_cb, void *ctx, uint32_t buf_count, uint32_t buf_length)
 {
     int result = fobos_check(dev);
     uint32_t packs_per_transfer;
@@ -3043,12 +3101,15 @@ static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_t cb, f
 #endif // FOBOS_PRINT_DEBUG
     if (result != FOBOS_ERR_OK)
     {
-        return result;
+        goto error;
     }
+
     if (FOBOS_IDDLE != dev->rx_async_status)
     {
-        return FOBOS_ERR_ASYNC_IN_SYNC;
+        result = FOBOS_ERR_ASYNC_IN_SYNC;
+        goto error;
     }
+
     result = FOBOS_ERR_OK;
     struct timeval tv0 = { 0, 0 };
     struct timeval tv1 = { 1, 0 };
@@ -3056,9 +3117,12 @@ static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_t cb, f
     dev->rx_async_status = FOBOS_STARTING;
     dev->rx_async_cancel = 0;
     dev->rx_buff_counter = 0;
+    dev->rx_cb_raw = raw_cb;
+    dev->rx_cb_raw_ctx = raw_ctx;
     dev->rx_cb = cb;
     dev->rx_sdr_cb = sdr_cb;
     dev->rx_cb_ctx = ctx;
+
     dev->rx_avg_re = 0.0f;
     dev->rx_avg_im = 0.0f;
     if (buf_count == 0)
@@ -3083,6 +3147,16 @@ static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_t cb, f
 
     buf_length = 4096 * packs_per_transfer; // complex samples count
 
+    if (sdr_cb || cb)
+    {
+        dev->rx_buff = (float*)malloc(buf_length * 2 * sizeof(float));
+        if (!dev->rx_buff)
+        {
+            result = FOBOS_ERR_NO_MEM;
+            goto error;
+        }
+    }
+
     uint32_t transfer_buf_size = buf_length * 4; //raw int16 buff size
     transfer_buf_size = 512 * (transfer_buf_size / 512); // len must be multiple of 512
 
@@ -3091,88 +3165,90 @@ static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_t cb, f
     result = fobos_alloc_buffers(dev);
     if (result != FOBOS_ERR_OK)
     {
-        return result;
+        goto error;
     }
 
-    dev->rx_buff = (float*)malloc(buf_length * 2 * sizeof(float));
-
-    dev->cmds->start(dev, packs_per_transfer);
-
-    for (size_t i = 0; i < dev->transfer_buf_count; ++i)
+    if (dev->cmds->start(dev, packs_per_transfer) == FOBOS_ERR_OK)
     {
-        libusb_fill_bulk_transfer(dev->transfer[i],
-            dev->libusb_devh,
-            LIBUSB_BULK_IN_ENDPOINT,
-            dev->transfer_buf[i],
-            dev->transfer_buf_size,
-            _libusb_callback,
-            (void *)dev,
-            LIBUSB_BULK_TIMEOUT);
-
-        result = libusb_submit_transfer(dev->transfer[i]);
-        if (result < 0)
+        for (size_t i = 0; i < dev->transfer_buf_count; ++i)
         {
-            printf_internal("Failed to submit transfer #%li, err %i\n", i, result);
-            dev->rx_async_status = FOBOS_CANCELING;
-            break;
-        }
-    }
+            libusb_fill_bulk_transfer(dev->transfer[i],
+                    dev->libusb_devh,
+                    LIBUSB_BULK_IN_ENDPOINT,
+                    dev->transfer_buf[i],
+                    dev->transfer_buf_size,
+                    _libusb_callback,
+                    (void *)dev,
+                    LIBUSB_BULK_TIMEOUT);
 
-    dev->rx_async_status = FOBOS_RUNNING;
-    printf_internal("FOBOS_RUNNING...\n");
-    while (FOBOS_IDDLE != dev->rx_async_status)
-    {
-        //printf_internal(" >%d< ", (int)dev->rx_async_status);
-        result = libusb_handle_events_timeout_completed(dev->libusb_ctx, &tv1, &dev->rx_async_cancel);
-        if (result < 0)
-        {
-            printf_internal("libusb_handle_events_timeout_completed returned: %d\n", result);
-            if (result == LIBUSB_ERROR_INTERRUPTED)
+            result = libusb_submit_transfer(dev->transfer[i]);
+            if (result < 0)
             {
-                continue;
-            }
-            else
-            {
+                printf_internal("Failed to submit transfer #%li, err %i\n", i, result);
+                dev->rx_async_status = FOBOS_CANCELING;
                 break;
             }
         }
-        if (FOBOS_CANCELING == dev->rx_async_status)
+
+        dev->rx_async_status = FOBOS_RUNNING;
+        printf_internal("FOBOS_RUNNING...\n");
+        while (FOBOS_IDDLE != dev->rx_async_status)
         {
-            printf_internal("FOBOS_CANCELING \n");
-            dev->rx_async_status = FOBOS_IDDLE;
-            if (!dev->transfer)
+            //printf_internal(" >%d< ", (int)dev->rx_async_status);
+            result = libusb_handle_events_timeout_completed(dev->libusb_ctx, &tv1, &dev->rx_async_cancel);
+            if (result < 0)
             {
-                break;
-            }
-            for (size_t i = 0; i < dev->transfer_buf_count; ++i)
-            {
-                //printf_internal(" ~%d", i);
-                if (!dev->transfer[i])
-                    continue;
-                if (LIBUSB_TRANSFER_CANCELLED != dev->transfer[i]->status)
+                printf_internal("libusb_handle_events_timeout_completed returned: %d\n", result);
+                if (result == LIBUSB_ERROR_INTERRUPTED)
                 {
-                    struct libusb_transfer * xf = dev->transfer[i];
-                    printf_internal(" ~%08x", xf->flags);
-
-                    result = libusb_cancel_transfer(dev->transfer[i]);
-                    libusb_handle_events_timeout_completed(dev->libusb_ctx, &tvx, NULL);
-                    if (result < 0)
-                    {
-                        printf_internal("libusb_cancel_transfer[%ld] returned: %d %s\n", i, result, libusb_error_name(result));
-                        continue;
-                    }
-                    dev->rx_async_status = FOBOS_CANCELING;
+                    continue;
+                }
+                else
+                {
+                    break;
                 }
             }
-            if (dev->dev_lost || FOBOS_IDDLE == dev->rx_async_status)
+            if (FOBOS_CANCELING == dev->rx_async_status)
             {
-                libusb_handle_events_timeout_completed(dev->libusb_ctx, &tvx, NULL);
-                break;
+                printf_internal("FOBOS_CANCELING \n");
+                dev->rx_async_status = FOBOS_IDDLE;
+                if (!dev->transfer)
+                {
+                    break;
+                }
+                for (size_t i = 0; i < dev->transfer_buf_count; ++i)
+                {
+                    //printf_internal(" ~%d", i);
+                    if (!dev->transfer[i])
+                        continue;
+                    if (LIBUSB_TRANSFER_CANCELLED != dev->transfer[i]->status)
+                    {
+                        struct libusb_transfer * xf = dev->transfer[i];
+                        printf_internal(" ~%08x", xf->flags);
+
+                        result = libusb_cancel_transfer(dev->transfer[i]);
+                        libusb_handle_events_timeout_completed(dev->libusb_ctx, &tvx, NULL);
+                        if (result < 0)
+                        {
+                            printf_internal("libusb_cancel_transfer[%ld] returned: %d %s\n", i, result, libusb_error_name(result));
+                            continue;
+                        }
+                        dev->rx_async_status = FOBOS_CANCELING;
+                    }
+                }
+                if (dev->dev_lost || FOBOS_IDDLE == dev->rx_async_status)
+                {
+                    libusb_handle_events_timeout_completed(dev->libusb_ctx, &tvx, NULL);
+                    break;
+                }
             }
         }
+
+        dev->cmds->stop(dev);
+
     }
 
-    dev->cmds->stop(dev);
+error:
     fobos_free_buffers(dev);
     free(dev->rx_buff);
     dev->rx_buff = NULL;
@@ -3181,9 +3257,14 @@ static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_t cb, f
     return result;
 }
 //==============================================================================
+int fobos_rx_read_async_raw(struct fobos_dev_t * dev, fobos_rx_cb_raw_t cb, void *ctx, uint32_t buf_count, uint32_t buf_length)
+{
+    return fobos_read_async_common(dev, cb, ctx, NULL, NULL, NULL, buf_count, buf_length);
+}
+//==============================================================================
 int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, uint32_t buf_count, uint32_t buf_length)
 {
-    return fobos_read_async_common(dev, cb, NULL, ctx, buf_count, buf_length);
+    return fobos_read_async_common(dev, fobos_float_raw_callback, dev, cb, NULL, ctx, buf_count, buf_length);
 }
 //==============================================================================
 int fobos_rx_cancel_async(struct fobos_dev_t * dev)
@@ -3271,7 +3352,8 @@ int fobos_rx_read_sync(struct fobos_dev_t * dev, float * buf, uint32_t * actual_
         LIBUSB_BULK_TIMEOUT);
     if (result == FOBOS_ERR_OK)
     {
-        fobos_rx_convert_all(dev, dev->rx_sync_buf, actual, buf);
+        fobos_preprocess_buffer(dev,dev->rx_sync_buf, actual);
+        fobos_rx_convert_samples(dev, dev->rx_sync_buf, actual, buf);
         if (actual_buf_length)
         {
             *actual_buf_length = actual / 4;
@@ -3598,7 +3680,7 @@ int fobos_sdr_read_async(
     uint32_t buf_count,
     uint32_t buf_length)
 {
-    return fobos_read_async_common(dev, NULL, cb, user, buf_count, buf_length);
+    return fobos_read_async_common(dev, fobos_float_raw_callback, dev, NULL, cb, user, buf_count, buf_length);
 }
 
 // stops the iq rx streaming
