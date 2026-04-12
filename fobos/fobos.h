@@ -58,8 +58,10 @@ API_EXPORT int CALL_CONV fobos_rx_get_api_info(char * lib_version, char * drv_ve
 API_EXPORT int CALL_CONV fobos_rx_get_device_count(void);
 // obtain the list of connected devices if space delimited format
 API_EXPORT int CALL_CONV fobos_rx_list_devices(char * serials);
-// open the specified device
+// open the specified device by index
 API_EXPORT int CALL_CONV fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index);
+// open the specified device by serial
+API_EXPORT int CALL_CONV fobos_rx_open_by_serial(struct fobos_dev_t ** out_dev, char* serial);
 // close device
 API_EXPORT int CALL_CONV fobos_rx_close(struct fobos_dev_t * dev);
 // close and reset device
@@ -141,6 +143,9 @@ API_EXPORT int CALL_CONV fobos_sdr_list_devices(char * serials);
 
 // open the specified device
 API_EXPORT int CALL_CONV fobos_sdr_open(struct fobos_sdr_dev_t ** out_dev, uint32_t index);
+
+// open the specified device by serial
+API_EXPORT int CALL_CONV fobos_sdr_open_by_serial(struct fobos_dev_t ** out_dev, char* serial);
 
 // close device
 API_EXPORT int CALL_CONV fobos_sdr_close(struct fobos_sdr_dev_t * dev);

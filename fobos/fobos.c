@@ -2270,112 +2270,173 @@ int fobos_rx_set_dev_gpo(struct fobos_dev_t * dev, uint16_t value)
     return result;
 }
 //==============================================================================
-int fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index)
+static int fobos_rx_open_device(struct fobos_dev_t *dev, libusb_device *device, struct libusb_device_descriptor *dd,  char *serial)
 {
-    int result = 0;
-    int i = 0;
-    size_t j;
-    struct fobos_dev_t * dev = NULL;
-    libusb_device **dev_list;
-    libusb_device *device = NULL;
-    ssize_t cnt;
-    uint32_t device_count = 0;
-    struct libusb_device_descriptor dd;
-    dev = (struct fobos_dev_t*)malloc(sizeof(struct fobos_dev_t));
-    if (NULL == dev)
-    {
-        return FOBOS_ERR_NO_MEM;
-    }
-    memset(dev, 0, sizeof(struct fobos_dev_t));
-    result = libusb_init(&dev->libusb_ctx);
-    if (result < 0)
-    {
-        free(dev);
-        return result;
-    }
-    cnt = libusb_get_device_list(dev->libusb_ctx, &dev_list);
-    for (i = 0; i < cnt; i++)
-    {
-        libusb_get_device_descriptor(dev_list[i], &dd);
-        for(j = 0; j < (sizeof(devices_cmds)/sizeof(devices_cmds[0])); j++)
-        {
-            if ((dd.idVendor == devices_cmds[j]->idVendor) &&
-                    (dd.idProduct == devices_cmds[j]->idProduct) &&
-                    (dd.bcdDevice == devices_cmds[j]->bcdDevice))
-            {
-                if (index == device_count)
-                {
-                    device = dev_list[i];
-                    dev->cmds = devices_cmds[j];
-                    printf("FOUND %s\n",devices_cmds[j]->name);
-                    break;
-                }
-                device_count++;
-            }
-        }
-    }
+    int result = FOBOS_ERR_LIBUSB;
+    int r;
+
+#ifdef FOBOS_PRINT_DEBUG
+    printf_internal("%s(%s);\n", __FUNCTION__, serial?serial:NULL);
+#endif // FOBOS_PRINT_DEBUG
+
     if (device)
     {
-        result = libusb_open(device, &dev->libusb_devh);
-        if (result == 0)
+        r = libusb_open(device, &dev->libusb_devh);
+        if (r == 0)
         {
-            libusb_get_string_descriptor_ascii(dev->libusb_devh, dd.iSerialNumber, (unsigned char*)dev->serial, sizeof(dev->serial));
-            libusb_get_string_descriptor_ascii(dev->libusb_devh, dd.iManufacturer, (unsigned char*)dev->manufacturer, sizeof(dev->manufacturer));
-            libusb_get_string_descriptor_ascii(dev->libusb_devh, dd.iProduct, (unsigned char*)dev->product, sizeof(dev->product));
-            result = libusb_claim_interface(dev->libusb_devh, 0);
-            if (result == 0)
+            libusb_get_string_descriptor_ascii(dev->libusb_devh, dd->iSerialNumber, (unsigned char*)dev->serial, sizeof(dev->serial));
+            if (!serial || !strcmp(serial,dev->serial))
             {
-                *out_dev = dev;
-                //======================================================================
-                result  = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 0, 0, (unsigned char*)dev->hw_revision, sizeof(dev->hw_revision), CTRL_TIMEOUT);
-                if (result <= 0)
+                libusb_get_string_descriptor_ascii(dev->libusb_devh, dd->iManufacturer, (unsigned char*)dev->manufacturer, sizeof(dev->manufacturer));
+                libusb_get_string_descriptor_ascii(dev->libusb_devh, dd->iProduct, (unsigned char*)dev->product, sizeof(dev->product));
+                r = libusb_claim_interface(dev->libusb_devh, 0);
+                if (r == 0)
                 {
-                    strcpy(dev->hw_revision, "2.0.0");
+                    //======================================================================
+                    r  = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 0, 0, (unsigned char*)dev->hw_revision, sizeof(dev->hw_revision), CTRL_TIMEOUT);
+                    if (r <= 0)
+                    {
+                        strcpy(dev->hw_revision, "2.0.0");
+                    }
+                    r = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 1, 0, (unsigned char*)dev->fw_version, sizeof(dev->fw_version), CTRL_TIMEOUT);
+                    if (r <= 0)
+                    {
+                        strcpy(dev->fw_version, "2.0.0");
+                    }
+                    r = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 2, 0, (unsigned char*)dev->fw_build, sizeof(dev->fw_build), CTRL_TIMEOUT);
+                    if (r <= 0)
+                    {
+                        strcpy(dev->fw_build, "unknown");
+                    }
+                    //======================================================================
+                    if (dev->cmds->open(dev) == FOBOS_ERR_OK)
+                    {
+                        return FOBOS_ERR_OK;
+                    }
                 }
-                result = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 1, 0, (unsigned char*)dev->fw_version, sizeof(dev->fw_version), CTRL_TIMEOUT);
-                if (result <= 0)
+                else
                 {
-                    strcpy(dev->hw_revision, "2.0.0");
-                }
-                result = libusb_control_transfer(dev->libusb_devh, CTRLI, 0xE8, 2, 0, (unsigned char*)dev->fw_build, sizeof(dev->fw_build), CTRL_TIMEOUT);
-                if (result <= 0)
-                {
-                    strcpy(dev->fw_build, "unknown");
-                }
-                //======================================================================
-                if (dev->cmds->open(dev) == FOBOS_ERR_OK)
-                {
-                    libusb_free_device_list(dev_list, 1);
-                    return FOBOS_ERR_OK;
+                    printf_internal("usb_claim_interface error %d\n", r);
                 }
             }
             else
             {
-                printf_internal("usb_claim_interface error %d\n", result);
+                result = FOBOS_ERR_NO_DEV;
             }
+            libusb_close(dev->libusb_devh);
+            dev->libusb_devh = 0;
         }
         else
         {
-            printf_internal("usb_open error %d\n", result);
+            printf_internal("usb_open error %d\n", r);
 #ifndef _WIN32
-            if (result == LIBUSB_ERROR_ACCESS)
+            if (r == LIBUSB_ERROR_ACCESS)
             {
                 printf_internal("Please fix the device permissions by installing fobos-sdr.rules\n");
             }
 #endif
         }
     }
+    return result;
+}
+//==============================================================================
+static int fobos_rx_open_by_serial_or_index(struct fobos_dev_t ** out_dev, char *serial, uint32_t index)
+{
+    int result = 0;
+    int r;
+    int i = 0;
+    size_t j;
+    struct fobos_dev_t * dev = NULL;
+    libusb_device **dev_list;
+    ssize_t cnt;
+    uint32_t device_count = 0;
+    struct libusb_device_descriptor dd;
+
+    if (!out_dev)
+    {
+        return FOBOS_ERR_NO_DEV;
+    }
+
+    dev = (struct fobos_dev_t*)malloc(sizeof(struct fobos_dev_t));
+    if (NULL == dev)
+    {
+        return FOBOS_ERR_NO_MEM;
+    }
+    memset(dev, 0, sizeof(struct fobos_dev_t));
+    r = libusb_init(&dev->libusb_ctx);
+    if (r < 0)
+    {
+        free(dev);
+        return FOBOS_ERR_LIBUSB;
+    }
+    cnt = libusb_get_device_list(dev->libusb_ctx, &dev_list);
+    for (i = 0; i < cnt; i++)
+    {
+        r = libusb_get_device_descriptor(dev_list[i], &dd);
+        if (r == 0)
+        {
+            for(j = 0; j < (sizeof(devices_cmds)/sizeof(devices_cmds[0])); j++)
+            {
+                if ((dd.idVendor == devices_cmds[j]->idVendor) &&
+                        (dd.idProduct == devices_cmds[j]->idProduct) &&
+                        (dd.bcdDevice == devices_cmds[j]->bcdDevice))
+                {
+                    dev->cmds = devices_cmds[j];
+
+                    if (serial || index == device_count)
+                    {
+                        result = fobos_rx_open_device(dev, dev_list[i], &dd, serial);
+                        if(!serial)
+                        {
+                            break;
+                        }
+
+                        if (result == FOBOS_ERR_OK)
+                        {
+                            printf("FOUND %s\n",devices_cmds[j]->name);
+                            break;
+                        }
+                        else if (result != FOBOS_ERR_NO_DEV)
+                        {
+                            break;
+                        }
+                    }
+
+                    device_count++;
+                }
+            }
+        }
+        else
+        {
+            result = FOBOS_ERR_LIBUSB;
+            break;
+        }
+    }
+
     libusb_free_device_list(dev_list, 1);
-    if (dev->libusb_devh)
+    if (result != FOBOS_ERR_OK)
     {
-        libusb_close(dev->libusb_devh);
+        if (dev->libusb_ctx)
+        {
+            libusb_exit(dev->libusb_ctx);
+        }
+        free(dev);
+        dev =  NULL;
     }
-    if (dev->libusb_ctx)
-    {
-        libusb_exit(dev->libusb_ctx);
-    }
-    free(dev);
-    return FOBOS_ERR_NO_DEV;
+
+    *out_dev = dev;
+    return result;
+}
+
+//==============================================================================
+int fobos_rx_open_by_serial(struct fobos_dev_t ** out_dev, char* serial)
+{
+    return fobos_rx_open_by_serial_or_index(out_dev, serial, (uint32_t)-1);
+}
+//==============================================================================
+int fobos_rx_open(struct fobos_dev_t ** out_dev, uint32_t index)
+{
+    return fobos_rx_open_by_serial_or_index(out_dev, NULL, index);
 }
 //==============================================================================
 int fobos_rx_close(struct fobos_dev_t * dev)
@@ -3610,5 +3671,9 @@ const char *  fobos_sdr_error_name(int error)
     return fobos_rx_error_name(error);
 }
 
-
+// open the specified device by serial
+int fobos_sdr_open_by_serial(struct fobos_dev_t ** out_dev, char* serial)
+{
+    return fobos_rx_open_by_serial(out_dev,serial);
+}
 
