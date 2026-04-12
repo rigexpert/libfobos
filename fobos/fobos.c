@@ -6,7 +6,7 @@
 //    /    __ / / / /  _  \  / ___/  \ \/ /  / __ \  / __ \  / ___\ /  _/
 //   /  /\ \   / / /  /_/ / / /___   /   /  / /_/ / /  ___/ / /     / /_
 //  /_ /  \_\ /_/  \__   / /______/ /_/\_\ / ____/  \____/ /_/      \___/
-//               /______/                 /_/             
+//               /______/                 /_/
 //  Fobos SDR API library
 //  2024.03.21
 //  2024.04.08
@@ -29,7 +29,7 @@
 #include <libusb-1.0/libusb.h>
 #include <conio.h>
 #include <Windows.h>
-#pragma comment(lib, "libusb-1.0.lib")                                             
+#pragma comment(lib, "libusb-1.0.lib")
 #else
 #include <libusb-1.0/libusb.h>
 #include <unistd.h>
@@ -954,7 +954,7 @@ static int fobosv2_stop(struct fobos_dev_t *dev)
 #define FOBOS_INJECT_LOW         1
 #define FOBOS_INJECT_HIGH        2
 //==============================================================================
-typedef struct 
+typedef struct
 {
     uint32_t idx;
     uint32_t freq_mhz_min;
@@ -1099,7 +1099,7 @@ static int fobosv2_set_freq(struct fobos_dev_t *dev, double value, double * actu
     int result = FOBOS_ERR_OK;
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(%f);\n", __FUNCTION__, value);
-#endif // FOBOS_PRINT_DEBUG    
+#endif // FOBOS_PRINT_DEBUG
     if (dev->rx_frequency != value)
     {
         size_t count = sizeof(fobos_rx_bands) / sizeof(fobos_rx_bands[0]);
@@ -1258,7 +1258,7 @@ static int fobosv2_get_srates(struct fobos_dev_t *dev, double * values, unsigned
 //==============================================================================
 const uint32_t fobos_p1s[] =
 {
-    10, 
+    10,
     16, 20, 25, 32, 40, 50, 64, 80, 100
 };
 //==============================================================================
@@ -1309,7 +1309,7 @@ const double fobos_max2830_adj[] =
     0.90, 0.95, 1.00, 1.05, 1.10
 };
 //==============================================================================
-static int fobosv2_set_bw(struct fobos_dev_t *dev, double value, double * actual)   
+static int fobosv2_set_bw(struct fobos_dev_t *dev, double value, double * actual)
 {
     int result = FOBOS_ERR_OK;
 #ifdef FOBOS_PRINT_DEBUG
@@ -1348,7 +1348,7 @@ static int fobosv2_set_bw(struct fobos_dev_t *dev, double value, double * actual
     if (dev->rx_bw_idx != idx)
     {
         dev->rx_bw_idx = idx;
-        fobos_max2830_write_reg(dev, 8, idx | 0x3020); 
+        fobos_max2830_write_reg(dev, 8, idx | 0x3020);
     }
     if (dev->rx_bw_adj != adj)
     {
@@ -1851,7 +1851,7 @@ static int fobosv3_set_srate(struct fobos_dev_t *dev, double value, double * act
     return result;
 }
 //==============================================================================
-static int fobosv3_set_bw(struct fobos_dev_t *dev, double value, double * actual)   
+static int fobosv3_set_bw(struct fobos_dev_t *dev, double value, double * actual)
 {
     int result = FOBOS_ERR_OK;
 #ifdef FOBOS_PRINT_DEBUG
@@ -2468,7 +2468,7 @@ int fobos_rx_set_frequency(struct fobos_dev_t * dev, double value, double * actu
     int result = fobos_check(dev);
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(%f);\n", __FUNCTION__, value);
-#endif // FOBOS_PRINT_DEBUG    
+#endif // FOBOS_PRINT_DEBUG
     if (result == FOBOS_ERR_OK)
     {
         result = dev->cmds->set_freq(dev, value, actual);
@@ -3203,10 +3203,10 @@ int fobos_rx_read_sync(struct fobos_dev_t * dev, float * buf, uint32_t * actual_
     }
     result = libusb_bulk_transfer(
         dev->libusb_devh,
-        LIBUSB_BULK_IN_ENDPOINT, 
-        dev->rx_sync_buf, 
-        dev->transfer_buf_size, 
-        &actual, 
+        LIBUSB_BULK_IN_ENDPOINT,
+        dev->rx_sync_buf,
+        dev->transfer_buf_size,
+        &actual,
         LIBUSB_BULK_TIMEOUT);
     if (result == FOBOS_ERR_OK)
     {
@@ -3274,7 +3274,7 @@ int fobos_rx_start_scan(struct fobos_dev_t * dev, double *frequencies, unsigned 
     int result = fobos_check(dev);
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s( .. , %d, %d);\n", __FUNCTION__, count, count);
-#endif // FOBOS_PRINT_DEBUG    
+#endif // FOBOS_PRINT_DEBUG
     if (result == FOBOS_ERR_OK)
     {
         if ((!frequencies) || (count < FOBOS_MIN_FREQS_CNT) || (count > FOBOS_MAX_FREQS_CNT))
@@ -3424,11 +3424,11 @@ int fobos_sdr_reset(struct fobos_sdr_dev_t * dev)
 
 // get the board info
 int fobos_sdr_get_board_info(
-    struct fobos_sdr_dev_t * dev, 
-    char * hw_revision, 
-    char * fw_version, 
-    char * manufacturer, 
-    char * product, 
+    struct fobos_sdr_dev_t * dev,
+    char * hw_revision,
+    char * fw_version,
+    char * manufacturer,
+    char * product,
     char * serial)
 {
     return fobos_rx_get_board_info(dev, hw_revision, fw_version, manufacturer, product, serial);
@@ -3498,7 +3498,7 @@ int fobos_sdr_get_samplerates(struct fobos_sdr_dev_t * dev, double * values, uns
     return fobos_rx_get_samplerates(dev, values, count);
 }
 
-// set the sample rate 
+// set the sample rate
 // value - the sample rate (Hz) to be set
 // (!) for hw rev.3.x.x and earlier sets the nearest sample rate to specified
 // (!) for hw rev.4.x.x and later one may set arbitrary sample rate with double precision
@@ -3509,14 +3509,14 @@ int fobos_sdr_set_samplerate(struct fobos_sdr_dev_t * dev, double value)
 
 // sets the baseband low pass filter exact bandwidth, Hz, disables the auto bandwidth mode (see later)
 // value - filter bandwidth (Hz)
-// (!) the actual bandwidth is set nearest to available in hardware 
+// (!) the actual bandwidth is set nearest to available in hardware
 int fobos_sdr_set_bandwidth(struct fobos_sdr_dev_t * dev, double value)
 {
     return fobos_rx_set_bandwidth(dev, value, 0);
 }
 
 // sets rx filter bandwidth relative to sample rate, disables the exact bandwidth mode
-// use 0.8 .. 0.9 for the most cases or play around 
+// use 0.8 .. 0.9 for the most cases or play around
 // set 0.0 or call fobos_sdr_set_bandwidth() to disable the auto bandwidth mode
 // (!) further call fobos_sdr_set_samplerate() will auto change the actual bandwidth
 int fobos_sdr_set_auto_bandwidth(struct fobos_sdr_dev_t * dev, double value)
@@ -3531,7 +3531,7 @@ int fobos_sdr_set_auto_bandwidth(struct fobos_sdr_dev_t * dev, double value)
 // buff_len - complex samples per buffer, should be an even multiple of 8192, otherwise will be truncated to nearest one
 //            should be at least 65536 for the frequence scanning to be posible
 int fobos_sdr_read_async(
-    struct fobos_sdr_dev_t * dev, 
+    struct fobos_sdr_dev_t * dev,
     fobos_sdr_cb_t cb,
     void *user,
     uint32_t buf_count,

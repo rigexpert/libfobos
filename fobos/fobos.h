@@ -5,7 +5,7 @@
 //    /    __ / / / /  _  \  / __/   \ \/ /  / __ \  / __ \  / ___\ /  _/
 //   /  /\ \   / / /  /_/ / / /____  /   /  / /_/ / /  ___/ / /     / /_
 //  /_ /  \_\ /_/ _\__   / /______/ /_/\_\ / ____/  \____/ /_/      \___/
-//               /______/                 /_/             
+//               /______/                 /_/
 //  Fobos SDR API library
 //  2024.03.21
 //  2024.04.08
@@ -122,7 +122,7 @@ API_EXPORT int CALL_CONV fobos_rx_read_user(struct fobos_dev_t* dev, void * data
 // (!) can be used for device specific applications
 API_EXPORT int CALL_CONV fobos_rx_write_user(struct fobos_dev_t* dev, void * data, int size);
 // sets rx filter bandwidth relative to sample rate, disables the exact bandwidth mode
-// use 0.8 .. 0.9 for the most cases or play around 
+// use 0.8 .. 0.9 for the most cases or play around
 // set 0.0 or call fobos_sdr_set_bandwidth() to disable the auto bandwidth mode
 // (!) further call fobos_sdr_set_samplerate() will auto change the actual bandwidth
 API_EXPORT int CALL_CONV fobos_rx_set_auto_bandwidth(struct fobos_dev_t * dev, double value);
@@ -150,11 +150,11 @@ API_EXPORT int CALL_CONV fobos_sdr_reset(struct fobos_sdr_dev_t * dev);
 
 // get the board info
 API_EXPORT int CALL_CONV fobos_sdr_get_board_info(
-    struct fobos_sdr_dev_t * dev, 
-    char * hw_revision, 
-    char * fw_version, 
-    char * manufacturer, 
-    char * product, 
+    struct fobos_sdr_dev_t * dev,
+    char * hw_revision,
+    char * fw_version,
+    char * manufacturer,
+    char * product,
     char * serial);
 
 // set rx frequency, Hz
@@ -192,7 +192,7 @@ API_EXPORT int CALL_CONV fobos_sdr_set_vga_gain(struct fobos_sdr_dev_t * dev, un
 // (!) for hw rev.4.x.x and later returns recommended sample rates, one may set arbitrary value in the range
 API_EXPORT int CALL_CONV fobos_sdr_get_samplerates(struct fobos_sdr_dev_t * dev, double * values, unsigned int * count);
 
-// set the sample rate 
+// set the sample rate
 // value - the sample rate (Hz) to be set
 // (!) for hw rev.3.x.x and earlier sets the nearest sample rate to specified
 // (!) for hw rev.4.x.x and later one may set arbitrary sample rate with double precision
@@ -200,11 +200,11 @@ API_EXPORT int CALL_CONV fobos_sdr_set_samplerate(struct fobos_sdr_dev_t * dev, 
 
 // sets the baseband low pass filter exact bandwidth, Hz, disables the auto bandwidth mode (see later)
 // value - filter bandwidth (Hz)
-// (!) the actual bandwidth is set nearest to available in hardware 
+// (!) the actual bandwidth is set nearest to available in hardware
 API_EXPORT int CALL_CONV fobos_sdr_set_bandwidth(struct fobos_sdr_dev_t * dev, double value);
 
 // sets rx filter bandwidth relative to sample rate, disables the exact bandwidth mode
-// use 0.8 .. 0.9 for the most cases or play around 
+// use 0.8 .. 0.9 for the most cases or play around
 // set 0.0 or call fobos_sdr_set_bandwidth() to disable the auto bandwidth mode
 // (!) further call fobos_sdr_set_samplerate() will auto change the actual bandwidth
 API_EXPORT int CALL_CONV fobos_sdr_set_auto_bandwidth(struct fobos_sdr_dev_t * dev, double value);
@@ -216,10 +216,10 @@ API_EXPORT int CALL_CONV fobos_sdr_set_auto_bandwidth(struct fobos_sdr_dev_t * d
 // buff_len - complex samples per buffer, should be an even multiple of 8192, otherwise will be truncated to nearest one
 //            should be at least 65536 for the frequence scanning to be posible
 API_EXPORT int CALL_CONV fobos_sdr_read_async(
-    struct fobos_sdr_dev_t * dev, 
-    fobos_sdr_cb_t cb, 
-    void *user, 
-    uint32_t buf_count, 
+    struct fobos_sdr_dev_t * dev,
+    fobos_sdr_cb_t cb,
+    void *user,
+    uint32_t buf_count,
     uint32_t buf_length);
 
 // stops the iq rx streaming
