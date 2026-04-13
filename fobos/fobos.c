@@ -366,6 +366,7 @@ int fobos_check(struct fobos_dev_t * dev);
 int fobos_rx_set_frequency(struct fobos_dev_t * dev, double value, double * actual);
 int fobos_rx_set_samplerate(struct fobos_dev_t * dev, double value, double * actual);
 int fobos_rx_set_auto_bandwidth(struct fobos_dev_t * dev, double value);
+int fobos_ctrl_out(struct fobos_dev_t * dev, uint8_t code, uint16_t value, uint16_t index, uint8_t *data, uint16_t len);
 //==============================================================================
 static char * to_bin(uint16_t s16, char * str)
 {
@@ -863,17 +864,27 @@ int fobos_si5351c_init(struct fobos_dev_t * dev)
 //==============================================================================
 int fobos_fx3_command(struct fobos_dev_t * dev, uint8_t code, uint16_t value, uint16_t index)
 {
+    /*
     int result = fobos_check(dev);
+    int r;
+
     if (result != FOBOS_ERR_OK)
     {
         return result;
     }
-    result = libusb_control_transfer(dev->libusb_devh, CTRLO, code, value, index, 0, 0, CTRL_TIMEOUT);
-    if (result < 0)
+
+    r = libusb_control_transfer(dev->libusb_devh, CTRLO, code, value, index, 0, 0, CTRL_TIMEOUT);
+    if (r < 0)
     {
-        result = libusb_control_transfer(dev->libusb_devh, CTRLO, code, value, index, 0, 0, CTRL_TIMEOUT);
+        r = libusb_control_transfer(dev->libusb_devh, CTRLO, code, value, index, 0, 0, CTRL_TIMEOUT);
     }
-    return result;
+
+    if (r < 0)
+    {
+        result = FOBOS_ERR_CONTROL;
+    }
+    return result;*/
+    return fobos_ctrl_out(dev,code,value,index,0,0);
 }
 //==============================================================================
 static int fobosv2_open(struct fobos_dev_t *dev)
@@ -1562,6 +1573,7 @@ static int fobosv2_stop_scan(struct fobos_dev_t *dev)
 static int fobosv2_write_firmware(struct fobos_dev_t* dev, const char * file_name, int verbose)
 {
     int result;
+    size_t r;
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(%s)\n", __FUNCTION__, file_name);
 #endif // FOBOS_PRINT_DEBUG
@@ -1586,7 +1598,14 @@ static int fobosv2_write_firmware(struct fobos_dev_t* dev, const char * file_nam
     size_t xx_count = (file_size + xx_size - 1)/ xx_size;
     uint8_t * file_data = (uint8_t * )malloc(xx_count * xx_size);
     fseek(f, 0, SEEK_SET);
-    fread(file_data, file_size, 1, f);
+    r = fread(file_data, file_size, 1, f);
+    if (r != file_size)
+    {
+        free(file_data);
+        fclose(f);
+        printf_internal("failed to read firmware");
+        return FOBOS_ERR_UNSUPPORTED;
+    }
     fclose(f);
     memset(file_data + file_size, 0, xx_count * xx_size - file_size);
     uint16_t xsize;
@@ -1700,22 +1719,33 @@ int fobosv2_write_user(struct fobos_dev_t * dev, void * data, int size)
 int fobos_ctrl_in(struct fobos_dev_t * dev, uint8_t code, uint16_t value, uint16_t index, uint8_t *data, uint16_t len)
 {
     int result = fobos_check(dev);
+
     if (result != FOBOS_ERR_OK)
     {
         return result;
     }
+
     result = libusb_control_transfer(dev->libusb_devh, CTRLI, code, value, index, data, len, CTRL_TIMEOUT);
+    if ( result != len)
+    {
+        result = FOBOS_ERR_CONTROL;
+    }
     return result;
 }
 //==============================================================================
 int fobos_ctrl_out(struct fobos_dev_t * dev, uint8_t code, uint16_t value, uint16_t index, uint8_t *data, uint16_t len)
 {
     int result = fobos_check(dev);
+
     if (result != FOBOS_ERR_OK)
     {
         return result;
     }
     result = libusb_control_transfer(dev->libusb_devh, CTRLO, code, value, index, data, len, CTRL_TIMEOUT);
+    if ( result != len)
+    {
+        result = FOBOS_ERR_CONTROL;
+    }
     return result;
 }
 //==============================================================================
@@ -1990,6 +2020,7 @@ static int fobosv3_stop_scan(struct fobos_dev_t *dev)
 static int fobosv3_write_firmware(struct fobos_dev_t* dev, const char * file_name, int verbose)
 {
     int result = fobos_check(dev);
+    size_t r;
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s(%s)\n", __FUNCTION__, file_name);
 #endif // FOBOS_PRINT_DEBUG
@@ -2018,7 +2049,14 @@ static int fobosv3_write_firmware(struct fobos_dev_t* dev, const char * file_nam
     size_t xx_count = (file_size + xx_size - 1) / xx_size;
     uint8_t * file_data = malloc(xx_count * xx_size);
     fseek(f, 0, SEEK_SET);
-    fread(file_data, file_size, 1, f);
+    r = fread(file_data, file_size, 1, f);
+    if (r != file_size)
+    {
+        free(file_data);
+        fclose(f);
+        printf_internal("failed to read firmware");
+        return FOBOS_ERR_UNSUPPORTED;
+    }
     fclose(f);
     memset(file_data + file_size, 0, xx_count * xx_size - file_size);
     uint16_t xsize;
@@ -2118,7 +2156,7 @@ int fobosv3_read_user(struct fobos_dev_t * dev, void * data, int size)
     uint16_t xsize = libusb_control_transfer(dev->libusb_devh, CTRLI, req_code, 0, 0, data, size, CTRL_TIMEOUT);
     if (xsize != size)
     {
-        result = FOBOS_ERR_LIBUSB;
+        result = FOBOS_ERR_CONTROL;
     }
     return result;
 }
@@ -2141,7 +2179,7 @@ int fobosv3_write_user(struct fobos_dev_t * dev, void * data, int size)
     uint16_t xsize = libusb_control_transfer(dev->libusb_devh, CTRLO, req_code, 0, 0, data, size, CTRL_TIMEOUT);
     if (xsize != size)
     {
-        result = FOBOS_ERR_LIBUSB;
+        result = FOBOS_ERR_CONTROL;
     }
     return result;
 }
@@ -3094,6 +3132,7 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
 static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_raw_t raw_cb, void *raw_ctx, fobos_rx_cb_t cb, fobos_sdr_cb_t sdr_cb, void *ctx, uint32_t buf_count, uint32_t buf_length)
 {
     int result = fobos_check(dev);
+    int r;
     uint32_t packs_per_transfer;
 
 #ifdef FOBOS_PRINT_DEBUG
@@ -3139,7 +3178,7 @@ static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_raw_t r
     {
         buf_length = FOBOS_DEF_BUF_LENGTH;
     }
-    packs_per_transfer = 2 * (buf_length / 8192); // should be even
+    packs_per_transfer = 2 * ((buf_length+8191) / 8192); // should be even
     if (packs_per_transfer < 16) // the minimal count for the scan
     {
         dev->rx_scan_active = 0;
@@ -3181,11 +3220,12 @@ static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_raw_t r
                     (void *)dev,
                     LIBUSB_BULK_TIMEOUT);
 
-            result = libusb_submit_transfer(dev->transfer[i]);
-            if (result < 0)
+            r = libusb_submit_transfer(dev->transfer[i]);
+            if (r < 0)
             {
-                printf_internal("Failed to submit transfer #%li, err %i\n", i, result);
+                printf_internal("Failed to submit transfer #%li, err %i\n", i, r);
                 dev->rx_async_status = FOBOS_CANCELING;
+                result = FOBOS_ERR_LIBUSB;
                 break;
             }
         }
@@ -3195,17 +3235,18 @@ static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_raw_t r
         while (FOBOS_IDDLE != dev->rx_async_status)
         {
             //printf_internal(" >%d< ", (int)dev->rx_async_status);
-            result = libusb_handle_events_timeout_completed(dev->libusb_ctx, &tv1, &dev->rx_async_cancel);
-            if (result < 0)
+            r = libusb_handle_events_timeout_completed(dev->libusb_ctx, &tv1, &dev->rx_async_cancel);
+            if (r < 0)
             {
-                printf_internal("libusb_handle_events_timeout_completed returned: %d\n", result);
-                if (result == LIBUSB_ERROR_INTERRUPTED)
+                printf_internal("libusb_handle_events_timeout_completed returned: %d\n", r);
+                if (r == LIBUSB_ERROR_INTERRUPTED)
                 {
                     continue;
                 }
                 else
                 {
-                    break;
+                    result = FOBOS_ERR_LIBUSB;
+                    dev->rx_async_status = FOBOS_CANCELING;
                 }
             }
             if (FOBOS_CANCELING == dev->rx_async_status)
@@ -3226,11 +3267,11 @@ static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_raw_t r
                         struct libusb_transfer * xf = dev->transfer[i];
                         printf_internal(" ~%08x", xf->flags);
 
-                        result = libusb_cancel_transfer(dev->transfer[i]);
+                        r = libusb_cancel_transfer(dev->transfer[i]);
                         libusb_handle_events_timeout_completed(dev->libusb_ctx, &tvx, NULL);
-                        if (result < 0)
+                        if (r < 0)
                         {
-                            printf_internal("libusb_cancel_transfer[%ld] returned: %d %s\n", i, result, libusb_error_name(result));
+                            printf_internal("libusb_cancel_transfer[%ld] returned: %d %s\n", i, r, libusb_error_name(r));
                             continue;
                         }
                         dev->rx_async_status = FOBOS_CANCELING;
@@ -3331,6 +3372,7 @@ int fobos_rx_start_sync(struct fobos_dev_t * dev, uint32_t buf_length)
 int fobos_rx_read_sync(struct fobos_dev_t * dev, float * buf, uint32_t * actual_buf_length)
 {
     int actual = 0;
+    int r;
     int result = fobos_check(dev);
 #ifdef FOBOS_PRINT_DEBUG
     printf_internal("%s()\n", __FUNCTION__);
@@ -3343,14 +3385,14 @@ int fobos_rx_read_sync(struct fobos_dev_t * dev, float * buf, uint32_t * actual_
     {
         return FOBOS_ERR_SYNC_NOT_STARTED;
     }
-    result = libusb_bulk_transfer(
+    r = libusb_bulk_transfer(
         dev->libusb_devh,
         LIBUSB_BULK_IN_ENDPOINT,
         dev->rx_sync_buf,
         dev->transfer_buf_size,
         &actual,
         LIBUSB_BULK_TIMEOUT);
-    if (result == FOBOS_ERR_OK)
+    if (r == LIBUSB_SUCCESS)
     {
         fobos_preprocess_buffer(dev,dev->rx_sync_buf, actual);
         fobos_rx_convert_samples(dev, dev->rx_sync_buf, actual, buf);
