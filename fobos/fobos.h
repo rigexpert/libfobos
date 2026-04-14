@@ -45,13 +45,16 @@ extern "C"
 #define FOBOS_ERR_BAD_PARAM         -10
 #define FOBOS_MIN_FREQS_CNT 2
 #define FOBOS_MAX_FREQS_CNT 256
+
+#define FOBOS_CB_PROP0  0
+#define FOBOS_CB_PROP0_SWAP_IQ  0x00000001
+
 //==============================================================================
 #define fobos_sdr_dev_t fobos_dev_t
-//struct fobos_dev_t;
 struct fobos_sdr_dev_t;
 typedef void(*fobos_rx_cb_t)(float *buf, uint32_t buf_length, void *ctx);
 typedef void(*fobos_sdr_cb_t)(float *buf, uint32_t buf_length, struct fobos_sdr_dev_t* sender, void *user);
-typedef void(*fobos_rx_cb_raw_t)(uint16_t *buf, uint32_t buf_length, int need_to_swap_iq, void *ctx);
+typedef void(*fobos_rx_cb_raw_t)(uint16_t *buf, uint32_t buf_length, void *ctx, uint32_t *cb_props, int cb_props_len);
 //==============================================================================
 // obtain the software info
 API_EXPORT int CALL_CONV fobos_rx_get_api_info(char * lib_version, char * drv_version);

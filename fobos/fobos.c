@@ -181,6 +181,7 @@ struct fobos_dev_t
     int rx_sync_started;
     unsigned char * rx_sync_buf;
     int do_reset;
+    uint32_t cb_props[1];
 };
 
 
@@ -2844,7 +2845,7 @@ void fobos_rx_convert_samples(struct fobos_dev_t * dev, void * data, size_t size
     dev->rx_dc_im = dc_im;
 }
 //==============================================================================
-static void fobos_float_raw_callback(uint16_t *buf, uint32_t buf_length, int need_to_swap_iq, void *ctx)
+static void fobos_float_raw_callback(uint16_t *buf, uint32_t buf_length, void *ctx, uint32_t *props, int props_len)
 {
    struct fobos_dev_t *dev = (struct fobos_dev_t *)ctx;
 
@@ -3092,7 +3093,12 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
 
                if (dev->rx_cb_raw)
                {
-                   dev->rx_cb_raw((uint16_t*)transfer->buffer, transfer->actual_length, need_to_swap_iq, dev->rx_cb_raw_ctx);
+                   if (need_to_swap_iq){
+                       dev->cb_props[FOBOS_CB_PROP0] |= FOBOS_CB_PROP0_SWAP_IQ;
+                   }else{
+                       dev->cb_props[FOBOS_CB_PROP0] &= ~FOBOS_CB_PROP0_SWAP_IQ;
+                   }
+                   dev->rx_cb_raw((uint16_t*)transfer->buffer, transfer->actual_length, dev->rx_cb_raw_ctx, dev->cb_props, 1);
                }
 
            }
