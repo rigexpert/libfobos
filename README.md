@@ -2,14 +2,30 @@
 
 This is the Fobos SDR receiver host software API shared library. Lightweight and easy to start. Full source code. Application examples.
 
+## Hardware support
+
+- hw.rev 2.x native support
+- hw.rev 3.x native support
+- hw.rev 4.x and higher native support
+
+## Features
+
+- supported all functions and features from libfobos v.2 and libfobos-sdr-agile
+- raw unprocessed 16bit IQ using async read
+- can be used as drop-in replacement for libfobos v.2 and libfobos-sdr-agile
+
+## Limitations
+
+- for fast frequency scan mode the special firmware required for hw.rev 3.x and earlier
+
 ## Versions
 
 See [versions.txt](versions.txt)
 
 ## Platforms tested on
 
-- Linux (Ubuntu 18.04 LTS, Ubuntu 22.04 LTS, Raspbian ...)
-- Windows (7, 8.1, 10, 11) x86, x64
+- Linux (Ubuntu 20.04 LTS)
+- Windows (10) x64
 
 ## Requirements
 

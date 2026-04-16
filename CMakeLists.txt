@@ -36,6 +36,11 @@ set(CMAKE_C_FLAGS, "${CMAKE_C_FLAGS} -std=c99")
 #set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -DFOBOS_PRINT_DEBUG")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g")
 
+SET(CMAKE_SKIP_BUILD_RPATH  ON)
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+SET(CMAKE_INSTALL_RPATH "")
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH OFF)
+
 ########################################################################
 
 ########################################################################
@@ -110,18 +115,20 @@ message(>>> "PROJECT_BINARY_DIR: " ${PROJECT_BINARY_DIR})
 ########################################################################
 # Fobos SDR library
 ########################################################################
-add_library(libfobos SHARED fobos/fobos.c)
+add_library(shared_opts INTERFACE)
 
-target_compile_options(libfobos PUBLIC -std=c99)
+target_sources(shared_opts INTERFACE ${CMAKE_SOURCE_DIR}/fobos/fobos.c)
+
+target_compile_options(shared_opts INTERFACE -std=c99)
 
 if(MSVC)
-target_compile_options(libfobos PUBLIC "/MT")
-ADD_CUSTOM_COMMAND(TARGET libfobos
+target_compile_options(shared_opts PUBLIC "/MT")
+ADD_CUSTOM_COMMAND(TARGET shared_opts
           POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/Debug
+          COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/Debug
           COMMAND ${CMAKE_COMMAND} -E copy ${LIBUSB_LIBRARIES}/libusb-1.0.dll ${PROJECT_BINARY_DIR}/Debug
 )
-ADD_CUSTOM_COMMAND(TARGET libfobos
+ADD_CUSTOM_COMMAND(TARGET shared_opts
           POST_BUILD
           COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_BINARY_DIR}/Release
           COMMAND ${CMAKE_COMMAND} -E copy ${LIBUSB_LIBRARIES}/libusb-1.0.dll ${PROJECT_BINARY_DIR}/Release
@@ -129,21 +136,41 @@ ADD_CUSTOM_COMMAND(TARGET libfobos
 else()
 endif()
 
-if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
-    target_link_libraries(libfobos PRIVATE ${LIBUSB_LIBRARIES})
-else()
-    target_link_directories(libfobos PRIVATE ${LIBUSB_LIBRARIES})
-endif()
 
-target_include_directories(libfobos PUBLIC
+target_include_directories(shared_opts INTERFACE
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
   $<INSTALL_INTERFACE:${CMAKE_SOURCE_DIR}>
   $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>/fobos
   ${LIBUSB_INCLUDE_DIRS}
   )
   
-set_target_properties(libfobos PROPERTIES DEFINE_SYMBOL "FOBOS_EXPORTS")
+set_target_properties(shared_opts PROPERTIES DEFINE_SYMBOL "FOBOS_EXPORTS")
+
+
+
+add_library(libfobos_sdr SHARED)
+set_target_properties(libfobos_sdr PROPERTIES OUTPUT_NAME fobos_sdr)
+if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
+    target_link_libraries(libfobos_sdr PRIVATE ${LIBUSB_LIBRARIES} shared_opts)
+else()
+    target_link_directories(libfobos_sdr PRIVATE ${LIBUSB_LIBRARIES} shared_opts)
+endif()
+
+ADD_CUSTOM_COMMAND(TARGET libfobos_sdr
+          POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/fobos/fobos.h ${CMAKE_CURRENT_BINARY_DIR}/fobos_sdr.h
+)
+
+
+add_library(libfobos SHARED)
 set_target_properties(libfobos PROPERTIES OUTPUT_NAME fobos)
+if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
+    target_link_libraries(libfobos PRIVATE ${LIBUSB_LIBRARIES} shared_opts)
+else()
+    target_link_directories(libfobos PRIVATE ${LIBUSB_LIBRARIES} shared_opts)
+endif()
+
+
 ########################################################################
 
 ########################################################################
@@ -152,6 +179,7 @@ set_target_properties(libfobos PROPERTIES OUTPUT_NAME fobos)
 INSTALL(
     FILES fobos/fobos.h
     DESTINATION include
+    COMPONENT libfobos
 )
 ########################################################################
 
@@ -161,7 +189,15 @@ INSTALL(
 INSTALL(
     TARGETS libfobos
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    COMPONENT libfobos
+)
+
+INSTALL(
+    TARGETS libfobos_sdr
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    COMPONENT libfobos
 ) 
+
 ########################################################################
 
 ########################################################################
@@ -192,7 +228,27 @@ CONFIGURE_FILE(
 INSTALL(
     FILES ${CMAKE_CURRENT_BINARY_DIR}/libfobos.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+    COMPONENT libfobos
 )
+
+
+CONFIGURE_FILE(
+    ${CMAKE_CURRENT_SOURCE_DIR}/libfobos_sdr.pc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/libfobos_sdr.pc
+@ONLY)
+
+INSTALL(
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/libfobos_sdr.pc
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+    COMPONENT libfobos
+)
+
+INSTALL(
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/fobos_sdr.h
+    DESTINATION include
+    COMPONENT libfobos
+)
+
 ########################################################################
 
 ########################################################################
