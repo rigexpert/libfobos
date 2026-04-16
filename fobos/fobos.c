@@ -3184,7 +3184,7 @@ static int fobos_read_async_common(struct fobos_dev_t * dev, fobos_rx_cb_raw_t r
     {
         buf_length = FOBOS_DEF_BUF_LENGTH;
     }
-    packs_per_transfer = 2 * ((buf_length+8191) / 8192); // should be even
+    packs_per_transfer = 2 * ((buf_length) / 8192); // should be even
     if (packs_per_transfer < 16) // the minimal count for the scan
     {
         dev->rx_scan_active = 0;
