@@ -1,3 +1,0 @@
-# debian/fobos-udev.install
-usr/lib/udev/rules.d/60-fobos-sdr.rules
-

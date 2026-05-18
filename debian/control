@@ -28,11 +28,4 @@ Depends:
  ${shlibs:Depends},
  ${misc:Depends},
 Description: RigExpert Fobos SDR runtime library
- Runtime library for RigExpert Fobos SDR
- 
-Package: fobos-udev
-Architecture: all
-Depends: ${misc:Depends}, udev
-Description: udev rules for RigExpert Fobos SDR
- udev rules for accessing RigExpert Fobos SDR devices.
-
+ Runtime library for RigExpert Fobos SDR 
