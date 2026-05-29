@@ -3,3 +3,6 @@
 /debhelper-build-stamp
 /files
 /tmp/
+fobos-udev/
+libfobos-dev/
+libfobos0/
