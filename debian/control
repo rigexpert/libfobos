@@ -1,0 +1,31 @@
+Source: libfobos
+Section: libs
+Priority: optional
+Maintainer: Phil Karn <karn@ka9q.net>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+Standards-Version: 4.7.2
+Homepage: https://rigexpert.com
+Vcs-Git: https://github.com/ka9q/libfobos-debian.git
+Vcs-Browser: https://github.com/ka9q/libfobos-debian
+
+Package: libfobos-dev
+Section: libdevel
+Architecture: any
+Multi-Arch: same
+Depends:
+ libfobos0 (= ${binary:Version}),
+ ${misc:Depends},
+Description: interface to RigExpert Fobos SDR
+ Provides an API to the RigExpert Fobos SDR
+
+Package: libfobos0
+Architecture: any
+Multi-Arch: same
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+Description: RigExpert Fobos SDR runtime library
+ Runtime library for RigExpert Fobos SDR 

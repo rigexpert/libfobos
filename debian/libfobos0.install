@@ -1,0 +1,2 @@
+usr/lib/*/lib*.so.*
+usr/lib/udev/rules.d/60-fobos-sdr.rules

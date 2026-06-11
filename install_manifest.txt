@@ -1,0 +1,6 @@
+/usr/lib/udev/rules.d/60-fobos-sdr.rules
+/usr/include/fobos.h
+/usr/lib/x86_64-linux-gnu/libfobos.so.0.0.0
+/usr/lib/x86_64-linux-gnu/libfobos.so.0
+/usr/lib/x86_64-linux-gnu/libfobos.so
+/usr/lib/x86_64-linux-gnu/pkgconfig/libfobos.pc

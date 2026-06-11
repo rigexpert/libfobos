@@ -1,3 +1,6 @@
+\#*\#
+.\#*
+*~undo-tree~
 build/
 Makefile
 Makefile.in
@@ -27,7 +30,7 @@ install-sh
 stamp-h1
 libtool
 Doxyfile
-
+.DS_Store
 .tarball-version
 .version
 
@@ -40,3 +43,4 @@ CMakeCache.txt
 */CMakeFiles
 CMakeFiles
 *.cmake
+obj-x86_64-linux-gnu/

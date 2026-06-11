@@ -1,0 +1,6 @@
+libfobos (2.4.1-3) trixie; urgency=medium
+
+  * clean out deadwood
+  * install udev rules as part of library not separate package
+
+ -- Phil Karn <karn@ka9q.net>  Sun, 17 May 2026 17:11:55 -0700

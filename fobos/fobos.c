@@ -2011,7 +2011,7 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
         result = libusb_submit_transfer(dev->transfer[i]);
         if (result < 0)
         {
-            printf_internal("Failed to submit transfer #%i, err %i\n", i, result);
+	    printf_internal("Failed to submit transfer #%zu, err %i\n", i, result);
             dev->rx_async_status = FOBOS_CANCELING;
             break;
         }
@@ -2056,7 +2056,7 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
                     libusb_handle_events_timeout_completed(dev->libusb_ctx, &tvx, NULL);
                     if (result < 0)
                     {
-                        printf_internal("libusb_cancel_transfer[%d] returned: %d %s\n", i, result, libusb_error_name(result));
+		        printf_internal("libusb_cancel_transfer[%zu] returned: %d %s\n", i, result, libusb_error_name(result));
                         continue;
                     }
                     dev->rx_async_status = FOBOS_CANCELING;
