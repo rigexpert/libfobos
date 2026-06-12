@@ -1,6 +1,3 @@
-\#*\#
-.\#*
-*~undo-tree~
 build/
 Makefile
 Makefile.in
@@ -10,6 +7,7 @@ Makefile.in
 *.lo
 *.la
 *.pc
+*.bak
 aclocal.m4
 acinclude.m4
 aminclude.am
@@ -43,4 +41,3 @@ CMakeCache.txt
 */CMakeFiles
 CMakeFiles
 *.cmake
-obj-x86_64-linux-gnu/

@@ -18,13 +18,15 @@
 //  2025.08.23 - v.2.4.0 DC filter improved, VGA gain fixed
 //  2025.10.23 - v.2.4.1 new software DC filter
 //==============================================================================
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#endif//_CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
-#include "fobos.h"
 #include <libusb.h>
+#include "fobos.h"
 #ifdef _WIN32
 #include <conio.h>
 #include <Windows.h>
@@ -37,7 +39,7 @@
 #define printf_internal printf
 #endif // !printf_internal
 //==============================================================================
-//#define FOBOS_PRINT_DEBUG
+#define FOBOS_PRINT_DEBUG
 //==============================================================================
 #define LIB_VERSION "2.4.1"
 #define DRV_VERSION "libusb"
@@ -69,7 +71,6 @@
 #define FOBOS_DEF_BUF_LENGTH        (16 * 32 * 512)
 #define LIBUSB_BULK_TIMEOUT         0
 #define LIBUSB_BULK_IN_ENDPOINT     0x81
-#define LIBUSB_DDESCRIPTOR_LEN      64
 #ifndef LIBUSB_CALL
 #define LIBUSB_CALL
 #endif
@@ -97,12 +98,12 @@ struct fobos_dev_t
     //=== common ===============================================================
     uint16_t user_gpo;
     uint16_t dev_gpo;
-    char hw_revision[32];
-    char fw_version[32];
-    char fw_build[32];
-    char manufacturer[LIBUSB_DDESCRIPTOR_LEN];
-    char product[LIBUSB_DDESCRIPTOR_LEN];
-    char serial[LIBUSB_DDESCRIPTOR_LEN];
+    char hw_revision[FOBOS_INFO_LEN];
+    char fw_version[FOBOS_INFO_LEN];
+    char fw_build[FOBOS_INFO_LEN];
+    char manufacturer[FOBOS_INFO_LEN];
+    char product[FOBOS_INFO_LEN];
+    char serial[FOBOS_INFO_LEN];
     //=== rx stuff =============================================================
     double rx_frequency;
     uint32_t rx_frequency_band;
@@ -235,6 +236,10 @@ int fobos_rx_list_devices(char * serials)
     printf_internal("%s();\n", __FUNCTION__);
 #endif // FOBOS_PRINT_DEBUG
     memset(string, 0, sizeof(string));
+    if (serials)
+    {
+        serials[0] = 0;
+    }
     result = libusb_init(&ctx);
     if (result < 0)
     {
@@ -550,14 +555,14 @@ int fobos_rffc507x_set_lo_frequency_hz(struct fobos_dev_t * dev, uint64_t lo_fre
     uint64_t fref = 25000000ULL;
     fref = dev->rffc507x_clock;
     uint16_t n_lo = 0; // aka p1lodiv
-    uint32_t x = lo_max / lo_freq_hz;
+    uint32_t x = (uint32_t)(lo_max / lo_freq_hz);
     while ((x > 1) && (n_lo < 5))
     {
         n_lo++;
         x >>= 1;
     }
 
-    lodiv = 1 << n_lo;
+    lodiv = 1ULL << n_lo;
     fvco = lodiv * lo_freq_hz;
 
     fbkdiv = 2;
@@ -574,7 +579,7 @@ int fobos_rffc507x_set_lo_frequency_hz(struct fobos_dev_t * dev, uint64_t lo_fre
     fobos_rffc507x_register_modify(&dev->rffc507x_registers_local[0x00], 2, 0, pllcpl);
 
     uint64_t tmp_n = (fvco << 29ULL) / (fbkdiv * fref);
-    n = tmp_n >> 29ULL;
+    n = (uint16_t)(tmp_n >> 29ULL);
 
     p1nmsb = (tmp_n >> 13ULL) & 0xffff;
     p1nlsb = (tmp_n >> 5ULL) & 0xff;
@@ -1155,10 +1160,10 @@ int fobos_rx_set_frequency(struct fobos_dev_t * dev, double value, double * actu
     }
     if (dev->rx_frequency != value)
     {
-        size_t count = sizeof(fobos_rx_bands) / sizeof(fobos_rx_bands[0]);
+        uint32_t count = (uint32_t)(sizeof(fobos_rx_bands) / sizeof(fobos_rx_bands[0]));
         uint32_t freq_mhz = (uint32_t)(value / 1E6 + 0.5);
-        size_t idx = count;
-        for (size_t i = 0; i < count; i++)
+        uint32_t idx = count;
+        for (uint32_t i = 0; i < count; i++)
         {
             if ((freq_mhz >= fobos_rx_bands[i].freq_mhz_min) && (freq_mhz <= fobos_rx_bands[i].freq_mhz_max))
             {
@@ -1467,8 +1472,8 @@ int fobos_rx_set_bandwidth(struct fobos_dev_t * dev, double value, double * actu
     uint32_t p1 = 0;
     size_t count = sizeof(fobos_max2830_bws) / sizeof(fobos_max2830_bws[0]);
     double dmin = value;
-    size_t idx = 0;
-    for (size_t i = 0; i < count; i++)
+    uint32_t idx = 0;
+    for (uint32_t i = 0; i < count; i++)
     {
         double df = fabs(value - fobos_max2830_bws[i]);
         if (df < dmin)
@@ -1479,8 +1484,8 @@ int fobos_rx_set_bandwidth(struct fobos_dev_t * dev, double value, double * actu
     }
     count = sizeof(fobos_max2830_adj) / sizeof(fobos_max2830_adj[0]);
     dmin = value;
-    size_t adj = 0;
-    for (size_t i = 0; i < count; i++)
+    uint32_t adj = 0;
+    for (uint32_t i = 0; i < count; i++)
     {
         double bw = fobos_max2830_bws[idx] * fobos_max2830_adj[i];
         double df = fabs(value - bw);
@@ -1497,12 +1502,12 @@ int fobos_rx_set_bandwidth(struct fobos_dev_t * dev, double value, double * actu
     if (dev->rx_bw_idx != idx)
     {
         dev->rx_bw_idx = idx;
-        fobos_max2830_write_reg(dev, 8, idx | 0x3020); 
+        fobos_max2830_write_reg(dev, 8, (uint16_t)(idx | 0x3020)); 
     }
     if (dev->rx_bw_adj != adj)
     {
         dev->rx_bw_adj = adj;
-        fobos_max2830_write_reg(dev, 7, adj | 0x1020);
+        fobos_max2830_write_reg(dev, 7, (uint16_t)(adj | 0x1020));
     }
     //printf("idx = %d, adj = %d\n", idx, adj);
     return result;
@@ -1632,8 +1637,8 @@ void fobos_rx_calibrate(struct fobos_dev_t * dev, void * data, size_t size)
     }
     summ_re /= complex_samples_count;
     summ_im /= complex_samples_count;
-    int16_t avg_re = summ_re;
-    int16_t avg_im = summ_im;
+    int16_t avg_re = (int16_t)summ_re;
+    int16_t avg_im = (int16_t)summ_im;
     psample = (int16_t *)data;
     for (size_t i = 0; i < chunks_count; i++)
     {
@@ -1904,7 +1909,7 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *transfer)
             //printf_internal(".");
             dev->rx_buff_counter++;
             fobos_rx_convert_samples(dev, transfer->buffer, transfer->actual_length, dev->rx_buff);
-            size_t complex_samples_count = transfer->actual_length / 4;
+            uint32_t complex_samples_count = transfer->actual_length / 4;
             if (dev->rx_cb)
             {
                 dev->rx_cb(dev->rx_buff, complex_samples_count, dev->rx_cb_ctx);
@@ -1942,7 +1947,7 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
 {
     int result = fobos_check(dev);
 #ifdef FOBOS_PRINT_DEBUG
-    printf_internal("%s(0x%08x, 0x%08x, 0x%08x, %d, %d)\n", __FUNCTION__, (unsigned int)dev, (unsigned int)cb, (unsigned int)ctx, buf_count, buf_length);
+    printf_internal("%s(%p, %p, %p, %d, %d)\n", __FUNCTION__, (void*)dev, (void*)cb, (void*)ctx, buf_count, buf_length);
 #endif // FOBOS_PRINT_DEBUG
     if (result != FOBOS_ERR_OK)
     {
@@ -1997,7 +2002,7 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
     bitclear(dev->dev_gpo, FOBOS_DEV_ADC_SDI);
     fobos_rx_set_dev_gpo(dev, dev->dev_gpo);
 
-    for (size_t i = 0; i < dev->transfer_buf_count; ++i)
+    for (uint32_t i = 0; i < dev->transfer_buf_count; ++i)
     {
         libusb_fill_bulk_transfer(dev->transfer[i],
             dev->libusb_devh,
@@ -2011,7 +2016,7 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
         result = libusb_submit_transfer(dev->transfer[i]);
         if (result < 0)
         {
-	    printf_internal("Failed to submit transfer #%zu, err %i\n", i, result);
+            printf_internal("Failed to submit transfer #%d, err %i\n", i, result);
             dev->rx_async_status = FOBOS_CANCELING;
             break;
         }
@@ -2042,7 +2047,7 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
             {
                 break;
             }
-            for (size_t i = 0; i < dev->transfer_buf_count; ++i)
+            for (uint32_t i = 0; i < dev->transfer_buf_count; ++i)
             {
                 //printf_internal(" ~%d", i);
                 if (!dev->transfer[i])
@@ -2050,13 +2055,13 @@ int fobos_rx_read_async(struct fobos_dev_t * dev, fobos_rx_cb_t cb, void *ctx, u
                 if (LIBUSB_TRANSFER_CANCELLED != dev->transfer[i]->status)
                 {
                     struct libusb_transfer * xf = dev->transfer[i];
-                    printf_internal(" ~%08x", xf->flags);
+                    printf_internal(" ~%02x", xf->flags);
 
                     result = libusb_cancel_transfer(dev->transfer[i]);
                     libusb_handle_events_timeout_completed(dev->libusb_ctx, &tvx, NULL);
                     if (result < 0)
                     {
-		        printf_internal("libusb_cancel_transfer[%zu] returned: %d %s\n", i, result, libusb_error_name(result));
+                        printf_internal("libusb_cancel_transfer[%d] returned: %d %s\n", i, result, libusb_error_name(result));
                         continue;
                     }
                     dev->rx_async_status = FOBOS_CANCELING;
@@ -2221,13 +2226,18 @@ int fobos_rx_write_firmware(struct fobos_dev_t* dev, const char * file_name, int
         fclose(f);
         return FOBOS_ERR_UNSUPPORTED;
     }
-    result = 0;
-    size_t xx_size = 1024;
-    size_t xx_count = (file_size + xx_size - 1)/ xx_size;
+    result = FOBOS_ERR_OK;
+    uint16_t xx_size = 1024;
+    uint16_t xx_count = (uint16_t)(file_size + xx_size - 1)/ xx_size;
     uint8_t * file_data = (uint8_t * )malloc(xx_count * xx_size);
     fseek(f, 0, SEEK_SET);
-    fread(file_data, file_size, 1, f);
+    size_t read = fread(file_data, file_size, 1, f);
     fclose(f);
+    if (read == 0)
+    {
+        free(file_data);
+        return FOBOS_ERR_UNSUPPORTED;
+    }
     memset(file_data + file_size, 0, xx_count * xx_size - file_size);
     uint16_t xsize;
     uint8_t req_code = 0xED;
@@ -2236,7 +2246,7 @@ int fobos_rx_write_firmware(struct fobos_dev_t* dev, const char * file_name, int
     {
         printf_internal("writing a firmware");
     }
-    for (size_t i = 0; i < xx_count; i++)
+    for (uint16_t i = 0; i < xx_count; i++)
     {
         if (verbose)
         {
@@ -2277,8 +2287,8 @@ int fobos_rx_read_firmware(struct fobos_dev_t* dev, const char * file_name, int 
         return FOBOS_ERR_UNSUPPORTED;
     }
     result = 0;
-    size_t xx_size = 1024;
-    size_t xx_count = 130;
+    uint16_t xx_size = 1024;
+    uint16_t xx_count = 130;
     uint8_t * xx_data = (uint8_t * )malloc(xx_size);
     uint16_t xsize;
     uint8_t req_code = 0xEC;
@@ -2286,7 +2296,7 @@ int fobos_rx_read_firmware(struct fobos_dev_t* dev, const char * file_name, int 
     {
         printf_internal("reading a firmware");
     }
-    for (size_t i = 0; i < xx_count; i++)
+    for (uint16_t i = 0; i < xx_count; i++)
     {
         if (verbose)
         {

@@ -5,6 +5,7 @@
 //  2024.03.21
 //  2024.04.08
 //  2024.05.01
+//  2026.06.12 - FOBOS_INFO_LEN
 //==============================================================================
 #include <stdio.h>
 #include <string.h>
@@ -14,17 +15,17 @@ void get_devinfo()
 {
     struct fobos_dev_t * dev = NULL;
     int result = 0;
-    char lib_version[32];
-    char drv_version[32];
+    char lib_version[FOBOS_INFO_LEN];
+    char drv_version[FOBOS_INFO_LEN];
     char serials[256] = {0};
 
     int index = 0;
 
-    char hw_revision[32];
-    char fw_version[32];
-    char manufacturer[32];
-    char product[32];
-    char serial[32];
+    char hw_revision[FOBOS_INFO_LEN];
+    char fw_version[FOBOS_INFO_LEN];
+    char manufacturer[FOBOS_INFO_LEN];
+    char product[FOBOS_INFO_LEN];
+    char serial[FOBOS_INFO_LEN];
     
     fobos_rx_get_api_info(lib_version, drv_version);
 

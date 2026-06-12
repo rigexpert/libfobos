@@ -1,11 +1,11 @@
-prefix=@CMAKE_INSTALL_PREFIX@
-exec_prefix=${prefix}
-libdir=${exec_prefix}/@CMAKE_INSTALL_LIBDIR@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
 includedir=@includedir@
 
-Name: libfobos
-Description: RigExpert Fobos SDR Library
-Version: @PROJECT_VERSION@
-Cflags: -I${includedir}
+Name: RigExpert Fobos SDR Library
+Description: C Utility Library
+Version: @LIBVER@
+Cflags: -I${includedir}/ @LIBFOBOS_PC_CFLAGS@
 Libs: -L${libdir} -lfobos
-Libs.private: -lusb-1.0
+Libs.private: -lusb-1.0 @LIBFOBOS_PC_LIBS@

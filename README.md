@@ -57,15 +57,12 @@ cmake --build . --config Release
 or<br />
 open **fobos.sln** in your favorite **MS VisualStudio IDE**, build, debug, trace, evaluate.<br />
 
-### MacOS
+### MacOS (if cmake fails)
 Make sure you have libusb installed: `brew install libusb`
 ```
 git clone [this repo]
 cd libfobos
-mkdir build
-cd build
-cmake ..
-make
+./build-mac.sh
 ```
 Verify the device is recognized: `build/mac/fobos_devinfo`
 
@@ -89,3 +86,15 @@ Receive some sample: `build/mac/fobos_recorder`. Then you can open the wav file 
 For more info visit the main product page
 
 https://rigexpert.com/en/products/kits-en/fobos-sdr/
+
+## For contributors
+
+Please follow the rules:
+- please keep it as simple as possible
+- do not overbloat and overcomplicate the project
+- do not reformat, reshape, refactor, remix, rewrite existing code
+- do like "one feature - one commit - one pull request"
+- do not make "pr-attack", do not stack pull requests
+- don to submit rarely used specific features
+- do not submit AI-generated, AI-driven, AI-related content
+- do not modify this rules

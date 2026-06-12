@@ -32,16 +32,17 @@ extern "C"
 #define API_EXPORT
 #endif // _WIN32
 //==============================================================================
-#define FOBOS_ERR_OK 0
-#define FOBOS_ERR_NO_DEV -1
-#define FOBOS_ERR_NOT_OPEN -2
-#define FOBOS_ERR_NO_MEM -3
-#define FOBOS_ERR_CONTROL -4
-#define FOBOS_ERR_ASYNC_IN_SYNC -5
-#define FOBOS_ERR_SYNC_IN_ASYNC -6
-#define FOBOS_ERR_SYNC_NOT_STARTED -7
-#define FOBOS_ERR_UNSUPPORTED -8
-#define FOBOS_ERR_LIBUSB -9
+#define FOBOS_ERR_OK                0
+#define FOBOS_ERR_NO_DEV            -1
+#define FOBOS_ERR_NOT_OPEN          -2
+#define FOBOS_ERR_NO_MEM            -3
+#define FOBOS_ERR_CONTROL           -4
+#define FOBOS_ERR_ASYNC_IN_SYNC     -5
+#define FOBOS_ERR_SYNC_IN_ASYNC     -6
+#define FOBOS_ERR_SYNC_NOT_STARTED  -7
+#define FOBOS_ERR_UNSUPPORTED       -8
+#define FOBOS_ERR_LIBUSB            -9
+#define FOBOS_INFO_LEN              64
 //==============================================================================
 struct fobos_dev_t;
 typedef void(*fobos_rx_cb_t)(float *buf, uint32_t buf_length, void *ctx);
@@ -64,9 +65,9 @@ API_EXPORT int CALL_CONV fobos_rx_get_board_info(struct fobos_dev_t * dev, char 
 API_EXPORT int CALL_CONV fobos_rx_set_frequency(struct fobos_dev_t * dev, double value, double * actual);
 // set rx direct sampling mode:  0 - disabled (default),  1 - enabled
 API_EXPORT int CALL_CONV fobos_rx_set_direct_sampling(struct fobos_dev_t * dev, unsigned int enabled);
-// low noise amplifier 0..2
+// low noise amplifier 0..3
 API_EXPORT int CALL_CONV fobos_rx_set_lna_gain(struct fobos_dev_t * dev, unsigned int value);
-// variable gain amplifier 0..15
+// variable gain amplifier 0..31
 API_EXPORT int CALL_CONV fobos_rx_set_vga_gain(struct fobos_dev_t * dev, unsigned int value);
 // get available sample rate list
 API_EXPORT int CALL_CONV fobos_rx_get_samplerates(struct fobos_dev_t * dev, double * values, unsigned int * count);
