@@ -97,10 +97,13 @@ endif()
 # Install udev rules
 ########################################################################
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+   set(CMAKE_INSTALL_UDEVRULESDIR "lib/udev/rules.d"
+       CACHE PATH "udev rules installation directory")
+
     install(
-        FILES fobos-sdr.rules
-        DESTINATION "/etc/udev/rules.d"
-        COMPONENT "udev")
+        FILES 73-fobos-sdr.rules
+        DESTINATION "${CMAKE_INSTALL_UDEVRULESDIR}"
+        COMPONENT udev)
 endif()
 ########################################################################
 
@@ -151,6 +154,10 @@ target_include_directories(libfobos PUBLIC
   
 set_target_properties(libfobos PROPERTIES DEFINE_SYMBOL "FOBOS_EXPORTS")
 set_target_properties(libfobos PROPERTIES OUTPUT_NAME fobos)
+set_target_properties(libfobos PROPERTIES
+    VERSION 2.4.1
+    SOVERSION 0
+)
 ########################################################################
 
 ########################################################################
@@ -273,6 +280,12 @@ target_include_directories(fobos_fwloader PRIVATE ${CMAKE_SOURCE_DIR})
 target_include_directories(fobos_fwloader PRIVATE ${CMAKE_SOURCE_DIR}/fobos)
 ########################################################################
 
+# install executables
+install(
+	TARGETS fobos_fwloader fobos_recorder fobos_devinfo
+	RUNTIME DESTINATION bin
+	COMPONENT tools
+)
 
 ########################################################################
 # Directories

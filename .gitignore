@@ -31,13 +31,13 @@ Doxyfile
 .DS_Store
 .tarball-version
 .version
-
 .*.swp
-
 doc/
-
-
 CMakeCache.txt
 */CMakeFiles
 CMakeFiles
 *.cmake
+debian/*.debhelper.log
+obj-x86_64-linux-gnu
+obj-aarch64-linux-gnu
+

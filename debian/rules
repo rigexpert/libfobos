@@ -15,6 +15,9 @@
 #export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 
 
+override_dh_auto_install:
+	dh_auto_install -- DESTDIR=$(CURDIR)/debian/tmp
+
 %:
 	dh $@
 
