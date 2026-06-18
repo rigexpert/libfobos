@@ -176,7 +176,7 @@ int fobos_rx_get_api_info(char * lib_version, char * drv_version)
 {
     if (lib_version)
     {
-        strcpy(lib_version, LIB_VERSION);
+        strcpy(lib_version, LIB_VERSION" "__DATE__" "__TIME__);
     }
     if (drv_version)
     {
